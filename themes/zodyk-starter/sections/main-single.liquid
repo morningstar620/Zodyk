@@ -1,0 +1,20 @@
+<section class="main-single">
+  <div class="container">
+    {% render 'heading', text: metaobject.name | default: metaobject.title | default: metaobject.handle, level: 1 %}
+    {% if metaobject.description != blank %}
+      <div class="main-single__body">{{ metaobject.description }}</div>
+    {% endif %}
+    {% if metaobject.price != blank %}
+      <p class="main-single__price">${{ metaobject.price }}</p>
+    {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Main Single",
+  "category": "Meta Objects",
+  "settings": [],
+  "presets": [{ "name": "Single" }]
+}
+{% endschema %}

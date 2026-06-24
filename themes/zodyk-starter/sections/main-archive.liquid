@@ -1,0 +1,26 @@
+<section class="main-archive">
+  <div class="container">
+    {% render 'heading', text: section.settings.heading | default: metaobject_type.name, level: 1 %}
+    <div class="archive-grid">
+      {% for item in metaobjects %}
+        {% render 'card', title: item.name | default: item.title | default: item.handle, url: request.path | append: '/' | append: item.handle, excerpt: item.description %}
+      {% else %}
+        <p>No entries found.</p>
+      {% endfor %}
+    </div>
+    {% if paginate.pages > 1 %}
+      <p class="pagination">Page {{ paginate.current_page }} of {{ paginate.pages }}</p>
+    {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Main Archive",
+  "category": "Meta Objects",
+  "settings": [
+    { "id": "heading", "type": "text", "label": "Heading" }
+  ],
+  "presets": [{ "name": "Archive" }]
+}
+{% endschema %}

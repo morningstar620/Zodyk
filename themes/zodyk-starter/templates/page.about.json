@@ -1,0 +1,21 @@
+{
+  "name": "About Page",
+  "sections": {
+    "header_1": { "type": "header", "settings": {} },
+    "hero_1": {
+      "type": "hero",
+      "settings": {
+        "title": "About Us",
+        "description": "Learn more about our mission and team.",
+        "button_text": "Contact",
+        "button_url": "/contact"
+      }
+    },
+    "features_1": {
+      "type": "features",
+      "settings": { "heading": "Our values" }
+    },
+    "footer_1": { "type": "footer", "settings": {} }
+  },
+  "order": ["header_1", "hero_1", "features_1", "footer_1"]
+}

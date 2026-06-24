@@ -1,0 +1,18 @@
+<section class="testimonial">
+  <div class="container">
+    <blockquote class="testimonial__quote">"{{ section.settings.quote }}"</blockquote>
+    <cite class="testimonial__author">— {{ section.settings.author }}</cite>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Testimonial",
+  "category": "Content",
+  "settings": [
+    { "id": "quote", "type": "textarea", "label": "Quote" },
+    { "id": "author", "type": "text", "label": "Author" }
+  ],
+  "presets": [{ "name": "Testimonial" }]
+}
+{% endschema %}

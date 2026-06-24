@@ -1,0 +1,17 @@
+{
+  "name": "Contact Page",
+  "sections": {
+    "header_1": { "type": "header", "settings": {} },
+    "hero_1": {
+      "type": "hero",
+      "settings": {
+        "title": "Contact Us",
+        "description": "We would love to hear from you.",
+        "button_text": "Email us",
+        "button_url": "mailto:hello@example.com"
+      }
+    },
+    "footer_1": { "type": "footer", "settings": {} }
+  },
+  "order": ["header_1", "hero_1", "footer_1"]
+}

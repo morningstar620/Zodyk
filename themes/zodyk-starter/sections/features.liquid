@@ -1,0 +1,21 @@
+<section class="features">
+  <div class="container">
+    {% render 'heading', text: section.settings.heading, level: 2 %}
+    <div class="features__grid">
+      <div class="features__item">Section-based themes</div>
+      <div class="features__item">Instance-isolated settings</div>
+      <div class="features__item">Meta object templates</div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Features",
+  "category": "Content",
+  "settings": [
+    { "id": "heading", "type": "text", "label": "Heading", "default": "Features" }
+  ],
+  "presets": [{ "name": "Features" }]
+}
+{% endschema %}

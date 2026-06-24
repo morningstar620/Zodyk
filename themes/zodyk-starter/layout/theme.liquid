@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="{{ request.locale | default: 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title | default: shop.name }}</title>
+  {{ content_for_header }}
+  {{ 'theme.css' | asset_url | stylesheet_tag }}
+  {% if settings.custom_css != blank %}
+    <style>{{ settings.custom_css }}</style>
+  {% endif %}
+</head>
+<body class="zodyk-theme">
+  {{ content_for_layout }}
+  {{ 'theme.js' | asset_url | script_tag }}
+  {% if settings.custom_js != blank %}
+    <script>{{ settings.custom_js }}</script>
+  {% endif %}
+</body>
+</html>

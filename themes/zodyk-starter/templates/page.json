@@ -1,0 +1,17 @@
+{
+  "name": "Default Page",
+  "sections": {
+    "header_1": { "type": "header", "settings": {} },
+    "hero_1": {
+      "type": "hero",
+      "settings": {
+        "title": "{{ page.title }}",
+        "description": "",
+        "button_text": "",
+        "button_url": ""
+      }
+    },
+    "footer_1": { "type": "footer", "settings": {} }
+  },
+  "order": ["header_1", "hero_1", "footer_1"]
+}

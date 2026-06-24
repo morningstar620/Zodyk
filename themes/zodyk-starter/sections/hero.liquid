@@ -1,0 +1,26 @@
+<section class="hero">
+  <div class="container hero__inner">
+    {% render 'heading', text: section.settings.title, level: 1 %}
+  {% if section.settings.description != blank %}
+    <p class="hero__description">{{ section.settings.description }}</p>
+  {% endif %}
+  {% if section.settings.button_text != blank and section.settings.button_url != blank %}
+    {% render 'button', text: section.settings.button_text, url: section.settings.button_url %}
+  {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Hero",
+  "category": "Banners",
+  "settings": [
+    { "id": "title", "type": "text", "label": "Title", "default": "Welcome" },
+    { "id": "description", "type": "textarea", "label": "Description" },
+    { "id": "button_text", "type": "text", "label": "Button text" },
+    { "id": "button_url", "type": "url", "label": "Button URL" },
+    { "id": "custom_css", "type": "textarea", "label": "Custom CSS" }
+  ],
+  "presets": [{ "name": "Hero" }]
+}
+{% endschema %}

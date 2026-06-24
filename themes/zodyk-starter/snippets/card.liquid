@@ -1,0 +1,11 @@
+<article class="card">
+  {% if url != blank %}
+    <a href="{{ url }}" class="card__link">
+      <h3 class="card__title">{{ title }}</h3>
+      {% if excerpt != blank %}<p class="card__excerpt">{{ excerpt }}</p>{% endif %}
+    </a>
+  {% else %}
+    <h3 class="card__title">{{ title }}</h3>
+    {% if excerpt != blank %}<p class="card__excerpt">{{ excerpt }}</p>{% endif %}
+  {% endif %}
+</article>

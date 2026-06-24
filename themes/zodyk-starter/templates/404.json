@@ -1,0 +1,17 @@
+{
+  "name": "404",
+  "sections": {
+    "header_1": { "type": "header", "settings": {} },
+    "hero_1": {
+      "type": "hero",
+      "settings": {
+        "title": "Page not found",
+        "description": "The page you are looking for does not exist.",
+        "button_text": "Go home",
+        "button_url": "/"
+      }
+    },
+    "footer_1": { "type": "footer", "settings": {} }
+  },
+  "order": ["header_1", "hero_1", "footer_1"]
+}

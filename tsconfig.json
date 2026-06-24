@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@zodyk/core": ["./packages/core/src/index.ts"],
+      "@zodyk/auth": ["./packages/auth/src/index.ts"],
+      "@zodyk/database": ["./packages/database/src/index.ts"],
+      "@zodyk/seo": ["./packages/seo/src/index.ts"],
+      "@zodyk/media": ["./packages/media/src/index.ts"],
+      "@zodyk/liquid": ["./packages/liquid/src/index.ts"],
+      "@zodyk/workflow": ["./packages/workflow/src/index.ts"],
+      "@zodyk/forms": ["./packages/forms/src/index.ts"],
+      "@zodyk/notifications": ["./packages/notifications/src/index.ts"],
+      "@zodyk/payments": ["./packages/payments/src/index.ts"],
+      "@zodyk/builder": ["./packages/builder/src/index.ts"],
+      "@zodyk/theme-engine": ["./packages/theme-engine/src/index.ts"],
+      "@zodyk/api": ["./packages/api/src/index.ts"],
+      "@zodyk/shared-ui": ["./packages/shared-ui/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next"]
+}

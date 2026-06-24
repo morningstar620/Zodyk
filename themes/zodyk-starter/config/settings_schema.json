@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Brand",
+    "settings": [
+      { "id": "site_name", "type": "text", "label": "Site name", "default": "Zodyk" },
+      { "id": "primary_color", "type": "color", "label": "Primary color", "default": "#18181b" },
+      { "id": "custom_css", "type": "textarea", "label": "Custom CSS" },
+      { "id": "custom_js", "type": "textarea", "label": "Custom JavaScript" }
+    ]
+  }
+]

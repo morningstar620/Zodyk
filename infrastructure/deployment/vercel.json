@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "comment": "Monorepo deploy targets — configure per-app projects in Vercel dashboard",
+  "projects": {
+    "admin": {
+      "path": "apps/admin",
+      "framework": "nextjs"
+    },
+    "website": {
+      "path": "apps/website",
+      "framework": "nextjs"
+    }
+  }
+}

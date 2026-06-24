@@ -1,0 +1,27 @@
+{
+  "name": "@zodyk/media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.830.0",
+    "@zodyk/auth": "workspace:*",
+    "@zodyk/core": "workspace:*",
+    "@zodyk/database": "workspace:*",
+    "sharp": "^0.34.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@zodyk/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./media": {
+      "types": "./src/media/handlers.ts",
+      "default": "./src/media/handlers.ts"
+    },
+    "./settings": {
+      "types": "./src/settings/handlers.ts",
+      "default": "./src/settings/handlers.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@zodyk/auth": "workspace:*",
+    "@zodyk/core": "workspace:*",
+    "@zodyk/database": "workspace:*",
+    "@zodyk/media": "workspace:*",
+    "@zodyk/theme-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

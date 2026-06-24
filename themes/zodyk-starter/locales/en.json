@@ -1,0 +1,12 @@
+{
+  "general": {
+    "home": "Home",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "sections": {
+    "hero": {
+      "welcome": "Welcome"
+    }
+  }
+}

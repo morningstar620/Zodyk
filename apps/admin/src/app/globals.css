@@ -1,0 +1,19 @@
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(admin-main),
+::view-transition-new(admin-main) {
+  animation-duration: 0.12s;
+}
+
+.admin-main {
+  view-transition-name: admin-main;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(admin-main),
+  ::view-transition-new(admin-main) {
+    animation-duration: 0s;
+  }
+}

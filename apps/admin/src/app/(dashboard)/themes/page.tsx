@@ -1,0 +1,218 @@
+'use client';
+
+import { Badge, Button } from '@zodyk/shared-ui';
+import Link from 'next/link';
+import { useApi, mutateApi } from '@/hooks/use-api';
+import { TableSkeleton } from '@/components/skeletons';
+
+interface ThemeRow {
+  id: string;
+  name: string;
+  slug: string;
+  version: string;
+  status: 'live' | 'draft' | 'archived';
+  isActive: boolean;
+  lastSavedAt?: string;
+  updatedAt: string;
+}
+
+interface HealthIssue {
+  code: string;
+  message: string;
+  severity: string;
+  templateKey?: string;
+  metaObjectSlug?: string;
+}
+
+interface HealthResponse {
+  issues: HealthIssue[];
+  themeId: string | null;
+}
+
+export default function ThemesPage() {
+  const { data: themes = [], isLoading: themesLoading } = useApi<ThemeRow[]>('/api/v1/themes');
+  const { data: health } = useApi<HealthResponse>('/api/v1/themes/health');
+
+  const issues = health?.issues ?? [];
+  const activeThemeId = health?.themeId ?? null;
+
+  async function refreshThemes() {
+    await mutateApi('/api/v1/themes');
+    await mutateApi('/api/v1/themes/health');
+  }
+
+  async function publish(themeId: string) {
+    await fetch('/api/v1/themes/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ themeId }),
+    });
+    await refreshThemes();
+  }
+
+  async function duplicate(themeId: string) {
+    await fetch('/api/v1/themes/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ themeId }),
+    });
+    await refreshThemes();
+  }
+
+  async function remove(themeId: string) {
+    if (!confirm('Delete this theme?')) return;
+    await fetch(`/api/v1/themes/${themeId}`, { method: 'DELETE' });
+    await refreshThemes();
+  }
+
+  async function scaffold(issue: HealthIssue) {
+    if (!activeThemeId || !issue.templateKey || !issue.metaObjectSlug) return;
+    const isArchive = issue.code === 'missing_archive_template';
+    const templatePath = `templates/${issue.templateKey}.${isArchive ? 'archive' : 'single'}.json`;
+    await fetch('/api/v1/themes/scaffold', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        themeId: activeThemeId,
+        templatePath,
+        name: `${issue.metaObjectSlug} ${isArchive ? 'Archive' : 'Single'}`,
+        sectionType: isArchive ? 'main-archive' : 'main-single',
+      }),
+    });
+    await refreshThemes();
+  }
+
+  const liveTheme = themes.find((t) => t.status === 'live' || t.isActive);
+  const draftThemes = themes.filter((t) => t.status === 'draft');
+
+  function formatDate(iso?: string) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString();
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-zinc-900">Themes</h1>
+        <p className="text-zinc-600">Customize your storefront appearance</p>
+      </div>
+
+      {themesLoading && themes.length === 0 ? (
+        <TableSkeleton rows={3} columns={4} />
+      ) : (
+        <>
+          {liveTheme && (
+            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+              <div className="grid gap-4 p-6 md:grid-cols-[1fr_auto]">
+                <div className="flex gap-4">
+                  <div className="hidden h-32 w-48 shrink-0 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-200 sm:block" />
+                  <div className="hidden h-32 w-20 shrink-0 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-200 sm:block" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-semibold text-zinc-900">{liveTheme.name}</h2>
+                      <Badge variant="success">Live</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Version {liveTheme.version} · Last saved {formatDate(liveTheme.lastSavedAt ?? liveTheme.updatedAt)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Button variant="outline" size="sm" onClick={() => duplicate(liveTheme.id)}>
+                    Duplicate
+                  </Button>
+                  <Link
+                    href={`/themes/${liveTheme.id}/customize`}
+                    prefetch
+                    className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-900 px-3 text-sm font-medium text-white"
+                  >
+                    Edit theme
+                  </Link>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-zinc-900">Draft themes</h2>
+            </div>
+            {draftThemes.length === 0 ? (
+              <p className="text-sm text-zinc-500">No draft themes. Duplicate the live theme to create one.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {draftThemes.map((theme) => (
+                  <li
+                    key={theme.id}
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 shrink-0 rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-200" />
+                      <div>
+                        <p className="font-medium text-zinc-900">{theme.name}</p>
+                        <p className="text-sm text-zinc-500">
+                          Last saved {formatDate(theme.lastSavedAt ?? theme.updatedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => publish(theme.id)}>
+                        Publish
+                      </Button>
+                      <Link
+                        href={`/themes/${theme.id}/code`}
+                        prefetch
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+                      >
+                        Edit code
+                      </Link>
+                      <Link
+                        href={`/themes/${theme.id}/customize`}
+                        prefetch
+                        className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-900 px-3 text-sm font-medium text-white"
+                      >
+                        Edit theme
+                      </Link>
+                      <Button size="sm" variant="outline" onClick={() => remove(theme.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+
+      <div>
+        <h2 className="text-lg font-semibold text-zinc-900">Theme health</h2>
+        {issues.length === 0 ? (
+          <p className="mt-2 text-sm text-zinc-600">No issues detected.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {issues.map((issue, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between rounded-md border border-zinc-200 px-4 py-3 text-sm"
+              >
+                <div>
+                  <Badge variant={issue.severity === 'error' ? 'destructive' : 'secondary'}>
+                    {issue.code}
+                  </Badge>
+                  <span className="ml-2 text-zinc-700">{issue.message}</span>
+                </div>
+                {(issue.code === 'missing_archive_template' ||
+                  issue.code === 'missing_single_template') && (
+                  <Button size="sm" variant="outline" onClick={() => scaffold(issue)}>
+                    Scaffold template
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

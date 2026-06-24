@@ -1,0 +1,19 @@
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a href="/" class="site-logo">{{ settings.site_name | default: shop.name }}</a>
+    <nav class="site-nav">
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a href="/product">Products</a>
+    </nav>
+  </div>
+</header>
+
+{% schema %}
+{
+  "name": "Header",
+    "category": "Header",
+  "settings": []
+}
+{% endschema %}

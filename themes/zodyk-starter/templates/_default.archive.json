@@ -1,0 +1,9 @@
+{
+  "name": "Default Archive",
+  "sections": {
+    "header_1": { "type": "header", "settings": {} },
+    "main_1": { "type": "main-archive", "settings": {} },
+    "footer_1": { "type": "footer", "settings": {} }
+  },
+  "order": ["header_1", "main_1", "footer_1"]
+}
