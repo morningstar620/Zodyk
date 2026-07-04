@@ -2,6 +2,7 @@
 
 import type { MediaAsset } from '@zodyk/core';
 import { Button, Skeleton } from '@zodyk/shared-ui';
+import { useFeedback } from '@zodyk/shared-ui/feedback';
 import { useEffect, useState } from 'react';
 import { MediaLibrary } from './MediaLibrary';
 
@@ -13,6 +14,7 @@ interface MediaPickerProps {
 }
 
 export function MediaPicker({ mode, accept, value, onChange }: MediaPickerProps) {
+  const toast = useFeedback();
   const [open, setOpen] = useState(false);
   const [previews, setPreviews] = useState<MediaAsset[]>([]);
   const [previewsLoading, setPreviewsLoading] = useState(false);
@@ -48,6 +50,11 @@ export function MediaPicker({ mode, accept, value, onChange }: MediaPickerProps)
       onChange(ids);
     }
     setOpen(false);
+    if (ids.length > 0) {
+      toast.success(
+        mode === 'single' ? 'Media selected' : `${ids.length} items selected`,
+      );
+    }
   };
 
   return (

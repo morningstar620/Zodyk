@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { MetaFieldDefinition } from './field-definition';
 import { collectConditionalRules, getVisibleFieldKeys, stripHiddenFields } from './conditional';
+import { entityReferenceSchema } from '../entity/entity-reference';
 
 function buildFieldZodSchema(field: MetaFieldDefinition): z.ZodTypeAny {
   const rules = field.validation;
@@ -47,6 +48,11 @@ function buildFieldZodSchema(field: MetaFieldDefinition): z.ZodTypeAny {
     case 'relation': {
       const cardinality = field.settings?.relation?.cardinality ?? 'one';
       schema = cardinality === 'many' ? z.array(z.string()) : z.string();
+      break;
+    }
+    case 'entity_reference': {
+      const cardinality = field.settings?.entityReference?.cardinality ?? 'one';
+      schema = cardinality === 'many' ? z.array(entityReferenceSchema) : entityReferenceSchema;
       break;
     }
     case 'repeater': {

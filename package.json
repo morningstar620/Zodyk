@@ -8,7 +8,9 @@
     "typecheck": "turbo typecheck",
     "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
-    "seed": "tsx infrastructure/scripts/seed.ts"
+    "seed": "tsx infrastructure/scripts/seed.ts",
+    "migrate:themes-r2": "tsx infrastructure/scripts/migrate-themes-to-r2.ts",
+    "migrate:remove-homepage": "tsx infrastructure/scripts/migrate-remove-homepage-pages.ts"
   },
   "devDependencies": {
     "dotenv": "^16.5.0",

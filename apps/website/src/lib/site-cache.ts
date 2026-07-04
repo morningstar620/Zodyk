@@ -7,9 +7,9 @@ const HTML_TTL_MS = process.env.NODE_ENV === 'development' ? 15_000 : 30_000;
 
 interface SiteData {
   theme: LoadedTheme;
-  homepage: Awaited<ReturnType<typeof loadHomepage>>;
   pages: Awaited<ReturnType<typeof loadPages>>;
   metaDefinitions: Awaited<ReturnType<typeof loadMetaDefinitions>>;
+  menus: Awaited<ReturnType<typeof loadMenus>>;
   fetchedAt: number;
 }
 
@@ -22,11 +22,6 @@ interface CachedPage {
 let siteDataCache: SiteData | null = null;
 const pageHtmlCache = new Map<string, CachedPage>();
 
-async function loadHomepage() {
-  const { Page } = getModels();
-  return Page.findOne({ tenantId: DEFAULT_TENANT_ID, isHomepage: true, status: 'published' }).lean();
-}
-
 async function loadPages() {
   const { Page } = getModels();
   return Page.find({ tenantId: DEFAULT_TENANT_ID, status: 'published' }).lean();
@@ -35,6 +30,11 @@ async function loadPages() {
 async function loadMetaDefinitions() {
   const { MetaObjectDefinition } = getModels();
   return MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' }).lean();
+}
+
+async function loadMenus() {
+  const { Menu } = getModels();
+  return Menu.find({ tenantId: DEFAULT_TENANT_ID }).sort({ title: 1 }).lean();
 }
 
 export async function getSiteData(uri: string): Promise<SiteData | null> {
@@ -47,17 +47,17 @@ export async function getSiteData(uri: string): Promise<SiteData | null> {
   const theme = await loadActiveTheme(DEFAULT_TENANT_ID);
   if (!theme) return null;
 
-  const [homepage, pages, metaDefinitions] = await Promise.all([
-    loadHomepage(),
+  const [pages, metaDefinitions, menus] = await Promise.all([
     loadPages(),
     loadMetaDefinitions(),
+    loadMenus(),
   ]);
 
   siteDataCache = {
     theme,
-    homepage,
     pages,
     metaDefinitions,
+    menus,
     fetchedAt: Date.now(),
   };
 

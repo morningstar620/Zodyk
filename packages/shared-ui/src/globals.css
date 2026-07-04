@@ -1,16 +1,68 @@
 @import 'tailwindcss';
 
+/* Tailwind's automatic content detection runs from the consuming app's cwd and
+   ignores node_modules, so utility classes used only inside shared-ui components
+   (e.g. the floating feedback toasts) would never be generated. Register this
+   package's sources explicitly so those classes are always emitted. */
+@source "./components";
+@source "./index.ts";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-background: #ffffff;
+  --color-background: #fafafa;
   --color-foreground: #09090b;
+  --color-card: #ffffff;
+  --color-card-foreground: #09090b;
   --color-muted: #f4f4f5;
   --color-muted-foreground: #71717a;
   --color-border: #e4e4e7;
-  --color-ring: #18181b;
+  --color-input: #e4e4e7;
+  --color-ring: #2563eb;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f4f4f5;
+  --color-secondary-foreground: #18181b;
+  --color-accent: #eff6ff;
+  --color-accent-foreground: #1d4ed8;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-sidebar-foreground: #09090b;
+  --color-sidebar-border: #e4e4e7;
+  --color-sidebar-accent: #eff6ff;
+  --color-sidebar-accent-foreground: #2563eb;
+  --color-sidebar-muted: #71717a;
   --radius-lg: 0.75rem;
   --radius-md: 0.5rem;
   --radius-sm: 0.25rem;
   --animate-shimmer: shimmer 1.5s ease-in-out infinite;
+}
+
+.dark {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #121214;
+  --color-card-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #3b82f6;
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #27272a;
+  --color-secondary-foreground: #fafafa;
+  --color-accent: #172554;
+  --color-accent-foreground: #93c5fd;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-sidebar: #0c0c0e;
+  --color-sidebar-foreground: #fafafa;
+  --color-sidebar-border: #27272a;
+  --color-sidebar-accent: #172554;
+  --color-sidebar-accent-foreground: #93c5fd;
+  --color-sidebar-muted: #a1a1aa;
 }
 
 @keyframes shimmer {
@@ -29,4 +81,93 @@
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+}
+
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  [data-clickable='true'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
+@keyframes feedback-enter {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 1rem));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes feedback-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 1rem));
+  }
+}
+
+@keyframes feedback-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.15;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes feedback-progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.feedback-toast-enter {
+  animation: feedback-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.feedback-toast-exit {
+  animation: feedback-exit 0.2s ease-in forwards;
+}
+
+.feedback-dots span {
+  animation: feedback-dot 1.2s ease-in-out infinite;
+}
+
+.feedback-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.feedback-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.feedback-progress-indeterminate {
+  animation: feedback-progress-slide 1.35s ease-in-out infinite;
 }

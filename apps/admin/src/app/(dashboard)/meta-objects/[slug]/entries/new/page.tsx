@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { MetaEntryForm } from '@/components/content/MetaEntryForm';
+import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import { MetaEntryFormSkeleton } from '@/components/skeletons';
 
 export default function NewMetaEntryPage() {
@@ -13,6 +14,7 @@ export default function NewMetaEntryPage() {
   const slug = params.slug;
   const router = useRouter();
 
+  const [typeName, setTypeName] = useState(slug);
   const [fieldGroups, setFieldGroups] = useState<MetaFieldGroup[]>([]);
   const [fields, setFields] = useState<MetaFieldDefinition[]>([]);
   const [data, setData] = useState<Record<string, unknown>>({});
@@ -28,6 +30,7 @@ export default function NewMetaEntryPage() {
       fetch(`/api/v1/meta-objects/${slug}`).then((r) => r.json()),
       fetch('/api/v1/meta-objects').then((r) => r.json()),
     ]).then(([type, types]) => {
+      setTypeName(type.name ?? slug);
       setFieldGroups(type.fieldGroups ?? []);
       setFields(type.fields ?? []);
       setMetaObjects(
@@ -72,10 +75,23 @@ export default function NewMetaEntryPage() {
   if (loading) return <MetaEntryFormSkeleton />;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900">New entry</h1>
-        <div className="flex gap-2">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <PageBreadcrumbs
+            items={[
+              { label: 'Content', href: '/meta-objects' },
+              { label: 'Meta Objects', href: '/meta-objects' },
+              { label: typeName, href: `/meta-objects/${slug}` },
+              { label: 'Entries', href: `/meta-objects/${slug}/entries` },
+              { label: 'New entry' },
+            ]}
+            className="mb-2"
+          />
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">New entry</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Create a new {typeName} entry</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" onClick={() => save('draft')} disabled={saving}>
             Save draft
           </Button>
@@ -102,8 +118,11 @@ export default function NewMetaEntryPage() {
         metaObjects={metaObjects}
       />
 
-      <Link href={`/meta-objects/${slug}/entries`} className="text-sm text-zinc-600 hover:underline">
-        Back to entries
+      <Link
+        href={`/meta-objects/${slug}/entries`}
+        className="text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Back to entries
       </Link>
     </div>
   );

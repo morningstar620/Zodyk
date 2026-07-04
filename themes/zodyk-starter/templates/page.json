@@ -2,16 +2,14 @@
   "name": "Default Page",
   "sections": {
     "header_1": { "type": "header", "settings": {} },
-    "hero_1": {
-      "type": "hero",
+    "main_1": {
+      "type": "main-page",
       "settings": {
-        "title": "{{ page.title }}",
-        "description": "",
-        "button_text": "",
-        "button_url": ""
+        "show_title": true,
+        "show_breadcrumb": true
       }
     },
     "footer_1": { "type": "footer", "settings": {} }
   },
-  "order": ["header_1", "hero_1", "footer_1"]
+  "order": ["header_1", "main_1", "footer_1"]
 }

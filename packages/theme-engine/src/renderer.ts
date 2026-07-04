@@ -60,6 +60,8 @@ export interface RenderContextInput {
     items: number;
     page_size: number;
   };
+  linklists?: Record<string, Record<string, unknown>>;
+  menus?: Record<string, Record<string, unknown>>;
 }
 
 export function buildBaseContext(input: RenderContextInput): Record<string, unknown> {
@@ -72,6 +74,8 @@ export function buildBaseContext(input: RenderContextInput): Record<string, unkn
     metaobjects: input.metaobjects ?? [],
     metaobject_type: input.metaobject_type,
     paginate: input.paginate,
+    linklists: input.linklists ?? {},
+    menus: input.menus ?? input.linklists ?? {},
     routes: {
       root: input.shop.url,
     },
@@ -186,13 +190,24 @@ export function listSectionTypes(files: Record<string, string>): string[] {
 export function parseAllSectionSchemas(
   files: Record<string, string>,
 ): Record<string, ReturnType<typeof parseSectionSchema>> {
+  return parseSectionSchemasForTypes(files, listSectionTypes(files));
+}
+
+export function parseSectionSchemasForTypes(
+  files: Record<string, string>,
+  types: string[],
+): Record<string, ReturnType<typeof parseSectionSchema>> {
   const result: Record<string, ReturnType<typeof parseSectionSchema>> = {};
-  for (const path of Object.keys(files)) {
-    if (!path.startsWith('sections/') || !path.endsWith('.liquid')) continue;
-    const type = path.replace('sections/', '').replace('.liquid', '');
-    result[type] = parseSectionSchema(files[path]!);
+  for (const type of types) {
+    const path = `sections/${type}.liquid`;
+    const content = files[path];
+    if (content) result[type] = parseSectionSchema(content);
   }
   return result;
+}
+
+export function getSectionTypesFromTemplate(template: TemplateJson): string[] {
+  return [...new Set(Object.values(template.sections).map((section) => section.type))];
 }
 
 export { resolveTemplatePath, mergeTemplateWithOverrides };

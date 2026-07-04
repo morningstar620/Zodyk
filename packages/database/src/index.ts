@@ -11,9 +11,12 @@ import { getAuditLogModel } from './models/audit-log';
 import { getMetaObjectDefinitionModel } from './models/meta-object-definition';
 import { getMediaAssetModel } from './models/media-asset';
 import { getMetaObjectEntryModel } from './models/meta-object-entry';
+import { getMenuModel } from './models/menu';
 import { getPageModel } from './models/page';
 import { getPlatformSettingsModel } from './models/platform-settings';
 import { getRoleModel } from './models/role';
+import { getSystemEntityDefinitionModel } from './models/system-entity-definition';
+import { getSystemEntityRecordModel } from './models/system-entity-record';
 import { getTemplateCustomizationModel } from './models/template-customization';
 import { getThemeModel } from './models/theme';
 import { getThemeFileModel } from './models/theme-file';
@@ -53,9 +56,12 @@ export function getModels() {
     MfaChallenge: getMfaChallengeModel(mongoose),
     MetaObjectDefinition: getMetaObjectDefinitionModel(mongoose),
     MetaObjectEntry: getMetaObjectEntryModel(mongoose),
+    SystemEntityDefinition: getSystemEntityDefinitionModel(mongoose),
+    SystemEntityRecord: getSystemEntityRecordModel(mongoose),
     MediaAsset: getMediaAssetModel(mongoose),
     PlatformSettings: getPlatformSettingsModel(mongoose),
     Page: getPageModel(mongoose),
+    Menu: getMenuModel(mongoose),
     Theme: getThemeModel(mongoose),
     ThemeFile: getThemeFileModel(mongoose),
     TemplateCustomization: getTemplateCustomizationModel(mongoose),
@@ -68,6 +74,7 @@ export async function ensureIndexes(): Promise<void> {
 }
 
 export { mongoose };
+export * from './repositories';
 export * from './models/user';
 export * from './models/role';
 export * from './models/api-token';
@@ -76,9 +83,12 @@ export * from './models/account';
 export * from './models/auth';
 export * from './models/meta-object-definition';
 export * from './models/meta-object-entry';
+export * from './models/system-entity-definition';
+export * from './models/system-entity-record';
 export * from './models/media-asset';
 export * from './models/platform-settings';
 export * from './models/page';
+export * from './models/menu';
 export * from './models/theme';
 export * from './models/theme-file';
 export * from './models/template-customization';

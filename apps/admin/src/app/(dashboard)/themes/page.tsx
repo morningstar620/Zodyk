@@ -2,6 +2,7 @@
 
 import { Badge, Button } from '@zodyk/shared-ui';
 import Link from 'next/link';
+import { useRef, useState } from 'react';
 import { useApi, mutateApi } from '@/hooks/use-api';
 import { TableSkeleton } from '@/components/skeletons';
 
@@ -29,12 +30,22 @@ interface HealthResponse {
   themeId: string | null;
 }
 
+interface StorageHealth {
+  configured: boolean;
+  connection?: boolean;
+  publicUrl?: boolean;
+}
+
 export default function ThemesPage() {
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const { data: themes = [], isLoading: themesLoading } = useApi<ThemeRow[]>('/api/v1/themes');
   const { data: health } = useApi<HealthResponse>('/api/v1/themes/health');
+  const { data: storageHealth } = useApi<StorageHealth>('/api/v1/storage/health');
 
   const issues = health?.issues ?? [];
   const activeThemeId = health?.themeId ?? null;
+  const storageReady = storageHealth?.configured && storageHealth?.connection;
 
   async function refreshThemes() {
     await mutateApi('/api/v1/themes');
@@ -61,8 +72,37 @@ export default function ThemesPage() {
 
   async function remove(themeId: string) {
     if (!confirm('Delete this theme?')) return;
-    await fetch(`/api/v1/themes/${themeId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/v1/themes/${themeId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'Failed to delete theme');
+      return;
+    }
     await refreshThemes();
+  }
+
+  async function downloadTheme(themeId: string) {
+    window.location.href = `/api/v1/themes/${themeId}/export`;
+  }
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', file.name.replace(/\.zip$/i, ''));
+      const res = await fetch('/api/v1/themes/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Upload failed');
+      }
+      await refreshThemes();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (uploadRef.current) uploadRef.current.value = '';
+    }
   }
 
   async function scaffold(issue: HealthIssue) {
@@ -92,10 +132,42 @@ export default function ThemesPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-900">Themes</h1>
-        <p className="text-zinc-600">Customize your storefront appearance</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Themes</h1>
+          <p className="text-zinc-600">Customize your storefront appearance</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            ref={uploadRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleUpload(file);
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!storageReady || uploading}
+            onClick={() => uploadRef.current?.click()}
+          >
+            {uploading ? 'Uploading…' : 'Add theme'}
+          </Button>
+        </div>
       </div>
+
+      {!storageReady && storageHealth !== undefined && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Object storage (R2) is required for themes. Configure R2 in{' '}
+          <Link href="/settings/integrations" className="font-medium underline">
+            Settings → Integrations
+          </Link>
+          .
+        </div>
+      )}
 
       {themesLoading && themes.length === 0 ? (
         <TableSkeleton rows={3} columns={4} />
@@ -113,14 +185,25 @@ export default function ThemesPage() {
                       <Badge variant="success">Live</Badge>
                     </div>
                     <p className="mt-1 text-sm text-zinc-500">
-                      Version {liveTheme.version} · Last saved {formatDate(liveTheme.lastSavedAt ?? liveTheme.updatedAt)}
+                      Version {liveTheme.version} · Last saved{' '}
+                      {formatDate(liveTheme.lastSavedAt ?? liveTheme.updatedAt)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
+                <div className="flex flex-wrap items-start gap-2">
+                  <Button variant="outline" size="sm" onClick={() => downloadTheme(liveTheme.id)}>
+                    Download
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => duplicate(liveTheme.id)}>
                     Duplicate
                   </Button>
+                  <Link
+                    href={`/themes/${liveTheme.id}/code`}
+                    prefetch
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+                  >
+                    Edit code
+                  </Link>
                   <Link
                     href={`/themes/${liveTheme.id}/customize`}
                     prefetch
@@ -138,7 +221,9 @@ export default function ThemesPage() {
               <h2 className="text-lg font-semibold text-zinc-900">Draft themes</h2>
             </div>
             {draftThemes.length === 0 ? (
-              <p className="text-sm text-zinc-500">No draft themes. Duplicate the live theme to create one.</p>
+              <p className="text-sm text-zinc-500">
+                No draft themes. Upload a zip or duplicate the live theme to create one.
+              </p>
             ) : (
               <ul className="flex flex-col gap-3">
                 {draftThemes.map((theme) => (
@@ -156,6 +241,9 @@ export default function ThemesPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => downloadTheme(theme.id)}>
+                        Download
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => publish(theme.id)}>
                         Publish
                       </Button>

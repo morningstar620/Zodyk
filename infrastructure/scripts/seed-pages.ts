@@ -8,23 +8,11 @@ export async function seedPages(): Promise<void> {
   await connectDatabase(process.env.MONGODB_URI!);
   const { Page } = getModels();
 
-  await Page.updateMany({ tenantId: DEFAULT_TENANT_ID }, { isHomepage: false });
-
   const pages = [
-    {
-      title: 'Home',
-      slug: 'home',
-      handle: 'home',
-      isHomepage: true,
-      status: 'published' as const,
-      templateSuffix: undefined,
-      publishedAt: new Date(),
-    },
     {
       title: 'About',
       slug: 'about',
       handle: 'about',
-      isHomepage: false,
       status: 'published' as const,
       templateSuffix: 'about',
       publishedAt: new Date(),
@@ -33,7 +21,6 @@ export async function seedPages(): Promise<void> {
       title: 'Contact',
       slug: 'contact',
       handle: 'contact',
-      isHomepage: false,
       status: 'published' as const,
       templateSuffix: 'contact',
       publishedAt: new Date(),

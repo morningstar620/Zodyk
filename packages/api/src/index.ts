@@ -49,5 +49,8 @@ export * from './api-tokens/handlers';
 export * from './audit-logs/handlers';
 export * from './meta-objects/handlers';
 export * from './meta-entries/handlers';
+export * from './system-entities/handlers';
 export * from './pages/handlers';
+export * from './menus/handlers';
 export * from './themes/handlers';
+export * from './storage/handlers';

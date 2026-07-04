@@ -1,9 +1,18 @@
 'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@zodyk/shared-ui';
-import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { DashboardPageSkeleton } from '@/components/skeletons';
+import { CommunityCard } from '@/components/dashboard/community-card';
+import { ContributeCard } from '@/components/dashboard/contribute-card';
+import { DashboardHeader } from '@/components/dashboard/dashboard-header';
+import { FeaturedPluginsCard } from '@/components/dashboard/featured-plugins-card';
+import { InstanceHealthCard } from '@/components/dashboard/instance-health-card';
+import { QuickStartCard } from '@/components/dashboard/quick-start-card';
+import { RecentActivityCard } from '@/components/dashboard/recent-activity-card';
+import { SelfHostingCard } from '@/components/dashboard/self-hosting-card';
+import { ThemeMarketplaceCard } from '@/components/dashboard/theme-marketplace-card';
+import { UpdateBanner } from '@/components/dashboard/update-banner';
+import { WhatsNewCard } from '@/components/dashboard/whats-new-card';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -13,57 +22,35 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-900">Dashboard</h1>
-        <p className="text-zinc-600">Welcome back, {session?.user?.name}</p>
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <DashboardHeader userName={session?.user?.name} />
+      <UpdateBanner />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <QuickStartCard />
+        </div>
+        <InstanceHealthCard />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Link href="/meta-objects" prefetch>
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Meta Objects</CardTitle>
-              <CardDescription>Custom content types and entries</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-zinc-600">Define schemas and manage dynamic content</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/users" prefetch>
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Users</CardTitle>
-              <CardDescription>Manage admin users and roles</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-zinc-600">Create, edit, and assign roles to users</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/roles" prefetch>
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Roles</CardTitle>
-              <CardDescription>Configure RBAC permissions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-zinc-600">View and customize role permissions</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/settings/api-tokens" prefetch>
-          <Card className="transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>API Tokens</CardTitle>
-              <CardDescription>Manage API access tokens</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-zinc-600">Generate scoped tokens for integrations</p>
-            </CardContent>
-          </Card>
-        </Link>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <WhatsNewCard />
+        <CommunityCard />
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <FeaturedPluginsCard />
+        <ThemeMarketplaceCard />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SelfHostingCard />
+        </div>
+        <ContributeCard />
+      </div>
+
+      <RecentActivityCard />
     </div>
   );
 }

@@ -1,0 +1,12 @@
+# Deploy from repo root:
+#   npx wrangler deploy -c infrastructure/deployment/wrangler.cdn-worker.toml
+#
+# Or copy bindings into the Cloudflare dashboard Worker editor.
+
+name = "zodyk-cdn-gate"
+main = "cloudflare-cdn-worker.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "ZODYK_BUCKET"
+bucket_name = "zodyck" # must match R2_BUCKET in .env

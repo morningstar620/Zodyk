@@ -1,0 +1,31 @@
+<section class="main-page">
+  <div class="container main-page__inner">
+    {% if section.settings.show_breadcrumb %}
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="/" class="breadcrumb__link">Home</a>
+        <span class="breadcrumb__sep" aria-hidden="true">/</span>
+        <span class="breadcrumb__current">{{ page.title }}</span>
+      </nav>
+    {% endif %}
+
+    {% if section.settings.show_title %}
+      {% render 'heading', text: page.title, level: 1 %}
+    {% endif %}
+
+    {% if page.body != blank %}
+      <div class="main-page__content rte">{{ page.body }}</div>
+    {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Page content",
+  "category": "Content",
+  "settings": [
+    { "id": "show_title", "type": "checkbox", "label": "Show page title", "default": true },
+    { "id": "show_breadcrumb", "type": "checkbox", "label": "Show breadcrumb", "default": true }
+  ],
+  "presets": [{ "name": "Page content" }]
+}
+{% endschema %}

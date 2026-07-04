@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
     '@zodyk/theme-engine',
   ],
   experimental: {
-    optimizePackageImports: ['@zodyk/shared-ui', '@zodyk/builder'],
+    optimizePackageImports: ['@zodyk/builder'],
   },
   serverExternalPackages: ['sharp', '@aws-sdk/client-s3', '@img/sharp-darwin-arm64'],
   async redirects() {

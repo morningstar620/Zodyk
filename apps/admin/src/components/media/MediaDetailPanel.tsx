@@ -2,6 +2,7 @@
 
 import type { MediaAsset } from '@zodyk/core';
 import { Button, Input, Label } from '@zodyk/shared-ui';
+import { useFeedback } from '@zodyk/shared-ui/feedback';
 import { useState } from 'react';
 
 interface MediaDetailPanelProps {
@@ -12,6 +13,7 @@ interface MediaDetailPanelProps {
 }
 
 export function MediaDetailPanel({ item, onClose, onUpdated, onDeleted }: MediaDetailPanelProps) {
+  const toast = useFeedback();
   const [alt, setAlt] = useState(item.metadata.alt ?? '');
   const [title, setTitle] = useState(item.metadata.title ?? '');
   const [caption, setCaption] = useState(item.metadata.caption ?? '');
@@ -22,6 +24,7 @@ export function MediaDetailPanel({ item, onClose, onUpdated, onDeleted }: MediaD
 
   const save = async () => {
     setSaving(true);
+    const toastId = toast.progress('Saving changes', { loadingStyle: 'dots' });
     try {
       const res = await fetch(`/api/v1/media/${item.id}`, {
         method: 'PATCH',
@@ -31,9 +34,15 @@ export function MediaDetailPanel({ item, onClose, onUpdated, onDeleted }: MediaD
           folder,
         }),
       });
-      if (!res.ok) throw new Error('Failed to save');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Failed to save');
+      }
       const updated = (await res.json()) as MediaAsset;
       onUpdated(updated);
+      toast.success('Changes saved', { id: toastId });
+    } catch (err) {
+      toast.failure(err instanceof Error ? err.message : 'Failed to save changes', { id: toastId });
     } finally {
       setSaving(false);
     }
@@ -42,18 +51,30 @@ export function MediaDetailPanel({ item, onClose, onUpdated, onDeleted }: MediaD
   const remove = async () => {
     if (!confirm('Delete this media file?')) return;
     setDeleting(true);
+    const toastId = toast.progress('Deleting file', { loadingStyle: 'dots' });
     try {
       const res = await fetch(`/api/v1/media/${item.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Failed to delete');
+      }
       onDeleted(item.id);
       onClose();
+      toast.success('File deleted', { id: toastId });
+    } catch (err) {
+      toast.failure(err instanceof Error ? err.message : 'Failed to delete file', { id: toastId });
     } finally {
       setDeleting(false);
     }
   };
 
   const copyUrl = async () => {
-    await navigator.clipboard.writeText(item.url);
+    try {
+      await navigator.clipboard.writeText(item.url);
+      toast.success('URL copied to clipboard');
+    } catch {
+      toast.error('Could not copy URL');
+    }
   };
 
   return (

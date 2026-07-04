@@ -11,6 +11,7 @@ export interface ITheme extends Document {
   status: ThemeStatus;
   isActive: boolean;
   tenantId: string;
+  storagePrefix?: string;
   sourceThemeId?: Types.ObjectId;
   previewToken: string;
   publishedAt?: Date;
@@ -31,6 +32,7 @@ const themeSchema = new Schema<ITheme>(
     },
     isActive: { type: Boolean, default: false },
     tenantId: { type: String, required: true, default: DEFAULT_TENANT_ID },
+    storagePrefix: { type: String, trim: true },
     sourceThemeId: { type: Schema.Types.ObjectId, ref: 'Theme' },
     previewToken: {
       type: String,

@@ -1,5 +1,6 @@
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireStorageConfig } from '@zodyk/media';
 import { requireEnv } from './load-env.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -7,6 +8,7 @@ const THEME_DIR = join(__dirname, '../../themes/zodyk-starter');
 
 export async function seedTheme(): Promise<void> {
   requireEnv('MONGODB_URI');
+  await requireStorageConfig();
 
   const { installThemeFromDirectory } = await import('@zodyk/theme-engine');
   const result = await installThemeFromDirectory(THEME_DIR, {

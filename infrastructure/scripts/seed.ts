@@ -9,6 +9,7 @@ async function main() {
   const { seedMetaObjects } = await import('./seed-meta-objects.js');
   const { seedTheme } = await import('./seed-theme.js');
   const { seedPages } = await import('./seed-pages.js');
+  const { seedMenus } = await import('./seed-menus.js');
 
   await migrateEntryHandles();
   await migrateThemeStatus();
@@ -18,6 +19,7 @@ async function main() {
   await seedMetaObjects();
   await seedTheme();
   await seedPages();
+  await seedMenus();
   console.log('Seed complete');
 }
 

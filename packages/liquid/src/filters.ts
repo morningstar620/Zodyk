@@ -28,6 +28,15 @@ export function registerZodykFilters(engine: Liquid, locales: Record<string, str
   engine.registerFilter('default', (value: unknown, defaultValue: unknown) =>
     value == null || value === '' ? defaultValue : value,
   );
+  engine.registerFilter('zodyk_block_attributes', (block: Record<string, unknown>, sectionId?: string) => {
+    if (!block || typeof block !== 'object') return '';
+    const id = block.id ?? block.blockId;
+    if (!id) return '';
+    const sid = sectionId ?? block.section_id ?? block.sectionId;
+    const attrs = [`class="zodyk-block"`, `data-block-id="${String(id)}"`];
+    if (sid) attrs.push(`data-section-id="${String(sid)}"`);
+    return attrs.join(' ');
+  });
 }
 
 export function resolveDynamicValue(

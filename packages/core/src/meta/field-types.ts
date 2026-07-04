@@ -12,6 +12,7 @@ export const META_FIELD_TYPES = [
   'gallery',
   'file',
   'relation',
+  'entity_reference',
   'repeater',
 ] as const;
 
@@ -34,6 +35,12 @@ export interface RelationSettings {
   cardinality: 'one' | 'many';
 }
 
+export interface EntityReferenceSettings {
+  targetCategory?: 'meta_object' | 'system';
+  targetSlug?: string;
+  cardinality: 'one' | 'many';
+}
+
 export interface SelectOption {
   label: string;
   value: string;
@@ -41,6 +48,7 @@ export interface SelectOption {
 
 export interface FieldTypeSettings {
   relation?: RelationSettings;
+  entityReference?: EntityReferenceSettings;
   repeater?: { minItems?: number; maxItems?: number; fields: import('./field-definition.js').MetaFieldDefinition[] };
   options?: SelectOption[];
   placeholder?: string;

@@ -4,6 +4,7 @@ import {
   getTemplateCustomization,
   loadThemeByPreview,
   metaObjectToLiquid,
+  menusToLinklists,
   pageToLiquid,
   renderThemedPage,
   resolveRoute,
@@ -22,6 +23,24 @@ export interface RenderSiteOptions {
 
 function getShopUrl(): string {
   return process.env.WEBSITE_URL ?? process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001';
+}
+
+type StoredMenuItem = { label: string; url: string; type: string; items?: StoredMenuItem[] };
+
+type MappedMenuItem = {
+  label: string;
+  url: string;
+  type: string;
+  items: MappedMenuItem[];
+};
+
+function mapMenuItems(items: StoredMenuItem[]): MappedMenuItem[] {
+  return (items ?? []).map((item) => ({
+    label: item.label,
+    url: item.url,
+    type: item.type,
+    items: mapMenuItems(item.items ?? []),
+  }));
 }
 
 function injectScripts(html: string, options: RenderSiteOptions): string {
@@ -97,11 +116,10 @@ export async function renderSitePage(
     return { html: '<h1>Site data unavailable</h1>', status: 503 };
   }
 
-  const { homepage, pages, metaDefinitions } = site;
+  const { pages, metaDefinitions, menus } = site;
   const { MetaObjectEntry } = getModels();
 
   const route = await resolveRoute(pathname, {
-    homepage,
     pages,
     metaDefinitions,
     findMetaEntries: async (slug, query) => {
@@ -137,10 +155,18 @@ export async function renderSitePage(
   });
 
   const shopUrl = getShopUrl();
+  const routeMenus = menus.map((menu) => ({
+    title: menu.title,
+    handle: menu.handle,
+    items: mapMenuItems((menu.items ?? []) as StoredMenuItem[]),
+  }));
+  const linklists = menusToLinklists(routeMenus, pathname);
   const baseContext = {
     shop: { name: String(theme.settings.site_name ?? 'Zodyk'), url: shopUrl, currency: 'USD' },
     request: { path: pathname, locale: 'en' },
     settings: theme.settings,
+    linklists,
+    menus: linklists,
   };
 
   let pageTemplateSuffix: string | undefined;
@@ -152,9 +178,6 @@ export async function renderSitePage(
 
   if (route.view === 'page' && route.page) {
     pageTemplateSuffix = route.page.templateSuffix;
-    resourceId = route.page._id.toString();
-    resourceType = 'page';
-  } else if (route.view === 'home' && route.page) {
     resourceId = route.page._id.toString();
     resourceType = 'page';
   } else if (route.view === 'meta_archive' && route.metaDefinition) {
@@ -189,7 +212,6 @@ export async function renderSitePage(
                 title: 'Home',
                 handle: 'home',
                 slug: 'home',
-                isHomepage: true,
                 status: 'published',
               } as const),
           ) as never)

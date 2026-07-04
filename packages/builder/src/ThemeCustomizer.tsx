@@ -1,85 +1,117 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PreviewFrame } from './PreviewFrame';
-import { SectionTree } from './SectionTree';
-import { SettingsPanel } from './SettingsPanel';
-import { type PageOption, useCustomizerStore } from './store';
+import { Skeleton } from '@zodyk/shared-ui';
+import { CustomizerLayout } from './components/layout/CustomizerLayout';
+import { SyncProgressBar } from './components/layout/SyncProgressBar';
+import { TopToolbar } from './components/layout/TopToolbar';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useCustomizerStore, type PageOption } from './store';
 
 interface ThemeCustomizerProps {
   themeId: string;
   websiteUrl?: string;
+  themeName?: string;
 }
 
-export function ThemeCustomizer({ themeId, websiteUrl }: ThemeCustomizerProps) {
+export function ThemeCustomizer({ themeId, websiteUrl, themeName }: ThemeCustomizerProps) {
   const [pages, setPages] = useState<PageOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(true);
+  const [schemasReady, setSchemasReady] = useState(false);
+  const [themeStatus, setThemeStatus] = useState<'live' | 'draft' | 'archived'>('draft');
+  const [publishing, setPublishing] = useState(false);
+  const [saveSucceeded, setSaveSucceeded] = useState(false);
 
   const {
-    previewToken,
-    mode,
-    device,
-    page,
-    dirty,
-    saving,
     setThemeMeta,
     setSchemas,
     setPage,
     setPageOptions,
     setTemplateJson,
-    setMode,
-    setDevice,
-    undo,
-    redo,
-    setSaving,
     setDirty,
     pushHistory,
+    setSaving,
     templateJson,
     themeSettings,
+    dirty,
+    initEditorMeta,
+    setSyncState,
   } = useCustomizerStore();
 
   useEffect(() => {
     async function load() {
-      const [metaRes, schemasRes, pagesRes] = await Promise.all([
-        fetch(`/api/v1/themes/${themeId}`),
-        fetch(`/api/v1/themes/${themeId}/schemas`),
-        fetch('/api/v1/themes/pages'),
-      ]);
-      const meta = await metaRes.json();
-      const schemas = await schemasRes.json();
-      const pagesData = await pagesRes.json();
+      setBootstrapLoading(true);
+      setSchemasReady(false);
+      try {
+        const res = await fetch(
+          `/api/v1/themes/${themeId}/customizer-bootstrap?pathname=${encodeURIComponent('/')}`,
+        );
+        if (!res.ok) throw new Error('Failed to load customizer');
+        const data = await res.json();
 
-      setThemeMeta({
-        themeId,
-        previewToken: meta.previewToken,
-        websiteUrl: websiteUrl ?? process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001',
-      });
-      setSchemas({
-        sectionSchemas: schemas.sectionSchemas,
-        settingsSchema: schemas.settingsSchema,
-        themeSettings: schemas.settings,
-      });
-      setPages(pagesData.items ?? []);
-      setPageOptions(pagesData.items ?? []);
-      const firstPage = pagesData.items?.[0];
-      if (firstPage) {
-        await loadTemplate(firstPage);
+        setThemeMeta({
+          themeId,
+          themeName: themeName ?? data.theme?.name ?? 'Theme',
+          previewToken: data.theme?.previewToken ?? '',
+          websiteUrl: websiteUrl ?? process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001',
+        });
+        initEditorMeta(themeId);
+        setThemeStatus(data.theme?.status ?? 'draft');
+        setPages(data.pages ?? []);
+        setPageOptions(data.pages ?? []);
+
+        const homePage =
+          (data.pages as PageOption[] | undefined)?.find(
+            (p) => p.templatePath === 'templates/index.json',
+          ) ??
+          data.page ??
+          (data.pages as PageOption[] | undefined)?.[0] ??
+          null;
+
+        if (homePage) setPage(homePage);
+
+        if (data.template && typeof data.template === 'object' && 'sections' in data.template) {
+          setTemplateJson(data.template);
+          setDirty(false);
+        } else if (homePage) {
+          const path = homePage.templatePath.replace(/^templates\//, '');
+          const templateRes = await fetch(`/api/v1/themes/${themeId}/templates/${path}`);
+          if (templateRes.ok) {
+            const template = await templateRes.json();
+            setTemplateJson(template);
+            setDirty(false);
+          }
+        }
+
+        setSchemas({
+          sectionSchemas: data.sectionSchemas ?? {},
+          sectionTypeList: data.sectionTypes ?? [],
+          settingsSchema: data.settingsSchema ?? [],
+          themeSettings: data.settings ?? {},
+        });
+        setSchemasReady(true);
+        useCustomizerStore.getState().refreshPreview();
+      } catch {
+        setSyncState('error');
+      } finally {
+        setBootstrapLoading(false);
       }
-      setLoading(false);
-    }
-
-    async function loadTemplate(p: PageOption) {
-      const path = p.templatePath.replace(/^templates\//, '');
-      const res = await fetch(`/api/v1/themes/${themeId}/templates/${path}`);
-      const template = await res.json();
-      setPage(p);
-      setTemplateJson(template);
-      setDirty(false);
     }
 
     load();
-  }, [themeId, websiteUrl, setThemeMeta, setSchemas, setPage, setPageOptions, setTemplateJson, setDirty]);
+  }, [
+    themeId,
+    websiteUrl,
+    themeName,
+    setThemeMeta,
+    setSchemas,
+    setPage,
+    setPageOptions,
+    setTemplateJson,
+    setDirty,
+    initEditorMeta,
+    setSyncState,
+  ]);
 
   async function handlePageSelect(p: PageOption) {
     if (dirty && !confirm('You have unsaved changes. Switch page anyway?')) return;
@@ -89,49 +121,77 @@ export function ThemeCustomizer({ themeId, websiteUrl }: ThemeCustomizerProps) {
     setPage(p);
     setTemplateJson(template);
     setDirty(false);
-    setPagePickerOpen(false);
+    useCustomizerStore.getState().refreshPreview();
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
+    setSyncState('syncing');
+    try {
+      const res = await fetch('/api/v1/themes/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ themeId }),
+      });
+      if (!res.ok) {
+        setSyncState('error');
+        return;
+      }
+      setThemeStatus('live');
+      setSyncState('saved');
+      window.setTimeout(() => setSyncState('idle'), 1200);
+    } catch {
+      setSyncState('error');
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function handleSave() {
+    const page = useCustomizerStore.getState().page;
     if (!page) return;
     setSaving(true);
+    setSaveSucceeded(false);
     pushHistory();
     const path = page.templatePath.replace(/^templates\//, '');
     try {
-      await fetch(`/api/v1/themes/${themeId}/templates/${path}`, {
+      setSyncState('syncing', 0);
+      const templateRes = await fetch(`/api/v1/themes/${themeId}/templates/${path}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(templateJson),
       });
-      await fetch(`/api/v1/themes/${themeId}/settings`, {
+      if (!templateRes.ok) {
+        setSyncState('error');
+        return;
+      }
+      setSyncState('syncing', 50);
+
+      const settingsRes = await fetch(`/api/v1/themes/${themeId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(themeSettings),
       });
+      if (!settingsRes.ok) {
+        setSyncState('error');
+        return;
+      }
+
       setDirty(false);
+      setSaveSucceeded(true);
+      setSyncState('saved', 100);
+      window.setTimeout(() => {
+        setSyncState('idle');
+        setSaveSucceeded(false);
+      }, 1200);
+    } catch {
+      setSyncState('error');
     } finally {
       setSaving(false);
     }
   }
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
-        e.preventDefault();
-        redo();
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  });
+  useKeyboardShortcuts({ onSave: handleSave });
 
   useEffect(() => {
     function onBeforeUnload(e: BeforeUnloadEvent) {
@@ -141,110 +201,26 @@ export function ThemeCustomizer({ themeId, websiteUrl }: ThemeCustomizerProps) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
 
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center text-zinc-600">Loading customizer…</div>;
-  }
-
   return (
     <div className="flex h-screen flex-col bg-zinc-100">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3">
-        <div className="flex items-center gap-2">
-          <a href="/themes" className="text-sm text-zinc-500 hover:text-zinc-800">
-            ← Themes
-          </a>
-          <div className="ml-2 flex rounded-md border border-zinc-200 p-0.5">
-            <button
-              type="button"
-              className={`rounded px-3 py-1 text-xs font-medium ${mode === 'sections' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}
-              onClick={() => setMode('sections')}
-            >
-              Sections
-            </button>
-            <button
-              type="button"
-              className={`rounded px-3 py-1 text-xs font-medium ${mode === 'theme_settings' ? 'bg-zinc-900 text-white' : 'text-zinc-600'}`}
-              onClick={() => setMode('theme_settings')}
-            >
-              Theme settings
-            </button>
-          </div>
-          <div className="relative ml-2">
-            <button
-              type="button"
-              className="rounded border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700"
-              onClick={() => setPagePickerOpen((v) => !v)}
-            >
-              {page?.label ?? 'Select page'} ▾
-            </button>
-            {pagePickerOpen && (
-              <div className="absolute left-0 top-full z-50 mt-1 max-h-80 w-64 overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-lg">
-                {pages.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
-                    onClick={() => handlePageSelect(p)}
-                  >
-                    <span className="text-zinc-400">{p.group}</span>
-                    <br />
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+      {bootstrapLoading ? (
+        <div className="flex h-12 items-center gap-3 border-b border-zinc-200 bg-white px-4">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-6 w-32" />
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={`rounded p-1.5 text-sm ${device === 'desktop' ? 'bg-zinc-200' : ''}`}
-            onClick={() => setDevice('desktop')}
-            title="Desktop"
-          >
-            💻
-          </button>
-          <button
-            type="button"
-            className={`rounded p-1.5 text-sm ${device === 'mobile' ? 'bg-zinc-200' : ''}`}
-            onClick={() => setDevice('mobile')}
-            title="Mobile"
-          >
-            📱
-          </button>
-          <button type="button" className="rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100" onClick={undo}>
-            ↩
-          </button>
-          <button type="button" className="rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100" onClick={redo}>
-            ↪
-          </button>
-          <a
-            href={`/themes/${themeId}/code`}
-            className="rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100"
-          >
-            Edit code
-          </a>
-          <button
-            type="button"
-            disabled={saving || !dirty}
-            className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            onClick={handleSave}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white">
-          <SectionTree />
-        </aside>
-        <main className="min-w-0 flex-1">
-          <PreviewFrame />
-        </main>
-        <aside className="w-80 shrink-0 border-l border-zinc-200 bg-white">
-          <SettingsPanel />
-        </aside>
-      </div>
+      ) : (
+        <TopToolbar
+          themeStatus={themeStatus}
+          pages={pages}
+          onPageSelect={handlePageSelect}
+          onSave={handleSave}
+          onPublish={handlePublish}
+          publishing={publishing}
+          saveSucceeded={saveSucceeded}
+        />
+      )}
+      <SyncProgressBar />
+      <CustomizerLayout schemasReady={schemasReady} bootstrapLoading={bootstrapLoading} />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { CopyObjectCommand, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { IMediaVariant } from '@zodyk/database';
+import { buildMediaObjectKey } from './objects';
 import { getR2Client } from './client';
 import { loadSharp } from './load-sharp';
-
-const MAX_IMAGE_WIDTH = 2560;
+import { generateVariants, isImageMime } from './image-processing';
 
 export interface UploadMediaInput {
   buffer: Buffer;
@@ -19,6 +19,8 @@ export interface UploadMediaResult {
   filename: string;
   r2Key: string;
   size: number;
+  width?: number;
+  height?: number;
   variants: IMediaVariant[];
 }
 
@@ -32,13 +34,7 @@ function buildKey(
   assetId: string,
   filename: string,
 ): string {
-  const normalizedFolder = folder === '/' ? '' : folder.replace(/^\//, '').replace(/\/$/, '');
-  const parts = [tenantId, normalizedFolder, assetId, filename].filter(Boolean);
-  return parts.join('/');
-}
-
-function isImageMime(mimeType: string): boolean {
-  return mimeType.startsWith('image/') && !mimeType.includes('svg');
+  return buildMediaObjectKey(tenantId, folder, assetId, filename);
 }
 
 export async function uploadToR2(input: UploadMediaInput): Promise<UploadMediaResult> {
@@ -57,70 +53,31 @@ export async function uploadToR2(input: UploadMediaInput): Promise<UploadMediaRe
     }),
   );
 
-  const variants: IMediaVariant[] = [];
+  let variants: IMediaVariant[] = [];
+  let width: number | undefined;
+  let height: number | undefined;
 
   if (isImageMime(input.mimeType)) {
     const sharp = await loadSharp();
-    const image = sharp(input.buffer).rotate();
-    const metadata = await image.metadata();
-    const width = metadata.width ?? MAX_IMAGE_WIDTH;
-    const resizeWidth = Math.min(width, MAX_IMAGE_WIDTH);
+    const metadata = await sharp(input.buffer).rotate().metadata();
+    width = metadata.width;
+    height = metadata.height;
 
-    const resized = image.resize({ width: resizeWidth, withoutEnlargement: true });
-
-    const [webpBuffer, avifBuffer, webpMeta, avifMeta] = await Promise.all([
-      resized.clone().webp({ quality: 82 }).toBuffer(),
-      resized.clone().avif({ quality: 65 }).toBuffer(),
-      resized.clone().webp({ quality: 82 }).toBuffer({ resolveWithObject: true }),
-      resized.clone().avif({ quality: 65 }).toBuffer({ resolveWithObject: true }),
-    ]);
-
-    const webpFilename = filename.replace(/\.[^.]+$/, '') + '.webp';
-    const avifFilename = filename.replace(/\.[^.]+$/, '') + '.avif';
-    const webpKey = buildKey(tenantId, folder, input.assetId, webpFilename);
-    const avifKey = buildKey(tenantId, folder, input.assetId, avifFilename);
-
-    await Promise.all([
-      client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: webpKey,
-          Body: webpBuffer,
-          ContentType: 'image/webp',
-        }),
-      ),
-      client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: avifKey,
-          Body: avifBuffer,
-          ContentType: 'image/avif',
-        }),
-      ),
-    ]);
-
-    variants.push(
-      {
-        format: 'webp',
-        r2Key: webpKey,
-        width: webpMeta.info.width ?? resizeWidth,
-        height: webpMeta.info.height ?? 0,
-        size: webpBuffer.length,
-      },
-      {
-        format: 'avif',
-        r2Key: avifKey,
-        width: avifMeta.info.width ?? resizeWidth,
-        height: avifMeta.info.height ?? 0,
-        size: avifBuffer.length,
-      },
-    );
+    variants = await generateVariants({
+      buffer: input.buffer,
+      filename,
+      tenantId,
+      folder,
+      assetId: input.assetId,
+    });
   }
 
   return {
     filename,
     r2Key,
     size: input.buffer.length,
+    width,
+    height,
     variants,
   };
 }

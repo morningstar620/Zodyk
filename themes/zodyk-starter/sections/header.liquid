@@ -2,10 +2,40 @@
   <div class="container site-header__inner">
     <a href="/" class="site-logo">{{ settings.site_name | default: shop.name }}</a>
     <nav class="site-nav">
-      <a href="/">Home</a>
-      <a href="/about">About</a>
-      <a href="/contact">Contact</a>
-      <a href="/product">Products</a>
+      {% assign main_menu = linklists['main'] %}
+      {% if main_menu and main_menu.links.size > 0 %}
+        {% for link in main_menu.links %}
+          {% if link.links.size > 0 %}
+            <div class="site-nav__dropdown">
+              <a href="{{ link.url }}" class="site-nav__link{% if link.active or link.child_active %} site-nav__link--active{% endif %}">
+                {{ link.title }}
+              </a>
+              <div class="site-nav__submenu">
+                {% for child in link.links %}
+                  <a href="{{ child.url }}" class="site-nav__sublink{% if child.active %} site-nav__sublink--active{% endif %}">
+                    {{ child.title }}
+                  </a>
+                  {% if child.links.size > 0 %}
+                    <div class="site-nav__submenu-nested">
+                      {% for grandchild in child.links %}
+                        <a href="{{ grandchild.url }}" class="site-nav__sublink{% if grandchild.active %} site-nav__sublink--active{% endif %}">
+                          {{ grandchild.title }}
+                        </a>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          {% else %}
+            <a href="{{ link.url }}" class="site-nav__link{% if link.active %} site-nav__link--active{% endif %}">
+              {{ link.title }}
+            </a>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <a href="/" class="site-nav__link">Home</a>
+      {% endif %}
     </nav>
   </div>
 </header>
@@ -13,7 +43,7 @@
 {% schema %}
 {
   "name": "Header",
-    "category": "Header",
+  "category": "Header",
   "settings": []
 }
 {% endschema %}

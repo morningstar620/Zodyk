@@ -12,8 +12,8 @@ export async function POST(
     const session = await getApiSession(request);
     const { id } = await params;
     const body = await request.json();
-    const result = await renderThemeSectionHandler(session, id, body);
-    return Response.json(result);
+    const { result, serverTiming } = await renderThemeSectionHandler(session, id, body);
+    return Response.json(result, { headers: serverTiming });
   } catch (error) {
     return handleApiError(error);
   }

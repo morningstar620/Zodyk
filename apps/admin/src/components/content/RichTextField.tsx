@@ -13,13 +13,14 @@ interface RichTextFieldProps {
 
 export function RichTextField({ value, onChange, placeholder }: RichTextFieldProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [StarterKit],
     content: value || '',
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm max-w-none min-h-[120px] px-3 py-2 focus:outline-none',
+          'tiptap min-h-[120px] px-3 py-2 focus:outline-none',
         placeholder: placeholder ?? 'Write content...',
       },
     },
@@ -27,7 +28,7 @@ export function RichTextField({ value, onChange, placeholder }: RichTextFieldPro
 
   useEffect(() => {
     if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '', false);
+      editor.commands.setContent(value || '', { emitUpdate: false });
     }
   }, [editor, value]);
 

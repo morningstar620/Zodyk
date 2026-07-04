@@ -7,7 +7,6 @@ export interface RoutePage {
   slug: string;
   handle: string;
   templateSuffix?: string;
-  isHomepage: boolean;
   body?: string;
   status: string;
   seo?: Record<string, unknown>;
@@ -74,7 +73,6 @@ function matchPattern(pattern: string, segments: string[]): Record<string, strin
 export function resolveRoute(
   pathname: string,
   options: {
-    homepage?: RoutePage | null;
     pages: RoutePage[];
     metaDefinitions: RouteMetaDefinition[];
     findMetaEntries: (
@@ -90,7 +88,6 @@ export function resolveRoute(
 async function resolveRouteInternal(
   pathname: string,
   options: {
-    homepage?: RoutePage | null;
     pages: RoutePage[];
     metaDefinitions: RouteMetaDefinition[];
     findMetaEntries: (
@@ -103,7 +100,7 @@ async function resolveRouteInternal(
   const segments = splitPath(pathname);
 
   if (segments.length === 0) {
-    return { view: 'home', page: options.homepage ?? undefined, slugSegments: [] };
+    return { view: 'home', slugSegments: [] };
   }
 
   for (const def of options.metaDefinitions) {
@@ -199,6 +196,70 @@ export function pageToLiquid(page: RoutePage): Record<string, unknown> {
     body: page.body,
     template_suffix: page.templateSuffix,
     seo: page.seo,
-    is_homepage: page.isHomepage,
   };
+}
+
+export interface RouteMenuItem {
+  label: string;
+  url: string;
+  type: string;
+  items?: RouteMenuItem[];
+}
+
+export interface RouteMenu {
+  title: string;
+  handle: string;
+  items: RouteMenuItem[];
+}
+
+function normalizePath(path: string): string {
+  const normalized = path.replace(/\/+$/, '') || '/';
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
+function isPathActive(itemUrl: string, currentPath: string): boolean {
+  const item = normalizePath(itemUrl);
+  const current = normalizePath(currentPath);
+  if (item === '/') return current === '/';
+  return current === item || current.startsWith(`${item}/`);
+}
+
+function menuItemToLiquid(
+  item: RouteMenuItem,
+  currentPath: string,
+): Record<string, unknown> {
+  const childLinks = (item.items ?? []).map((child) => menuItemToLiquid(child, currentPath));
+  const active = isPathActive(item.url, currentPath);
+  const childActive = childLinks.some(
+    (child) => child.active === true || child.child_active === true,
+  );
+
+  return {
+    title: item.label,
+    url: item.url,
+    type: item.type,
+    active,
+    child_active: childActive,
+    links: childLinks,
+  };
+}
+
+export function menuToLiquid(menu: RouteMenu, currentPath: string): Record<string, unknown> {
+  const links = (menu.items ?? []).map((item) => menuItemToLiquid(item, currentPath));
+  return {
+    title: menu.title,
+    handle: menu.handle,
+    links,
+  };
+}
+
+export function menusToLinklists(
+  menus: RouteMenu[],
+  currentPath: string,
+): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {};
+  for (const menu of menus) {
+    result[menu.handle] = menuToLiquid(menu, currentPath);
+  }
+  return result;
 }

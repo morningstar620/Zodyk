@@ -38,6 +38,12 @@ export interface MetaFieldDefinition {
   required?: boolean;
   localized?: boolean;
   isSystem?: boolean;
+  unique?: boolean;
+  searchable?: boolean;
+  filterable?: boolean;
+  sortable?: boolean;
+  hidden?: boolean;
+  readOnly?: boolean;
   defaultValue?: unknown;
   validation?: ValidationRules;
   conditional?: ConditionalRule[];
@@ -49,6 +55,13 @@ const fieldSettingsSchema = z.object({
   relation: z
     .object({
       targetSlug: z.string().min(1),
+      cardinality: z.enum(['one', 'many']),
+    })
+    .optional(),
+  entityReference: z
+    .object({
+      targetCategory: z.enum(['meta_object', 'system']).optional(),
+      targetSlug: z.string().min(1).optional(),
       cardinality: z.enum(['one', 'many']),
     })
     .optional(),
@@ -69,6 +82,12 @@ export const metaFieldDefinitionSchema: z.ZodType<MetaFieldDefinition, z.ZodType
     required: z.boolean().default(false),
     localized: z.boolean().default(false),
     isSystem: z.boolean().default(false),
+    unique: z.boolean().default(false),
+    searchable: z.boolean().default(false),
+    filterable: z.boolean().default(false),
+    sortable: z.boolean().default(false),
+    hidden: z.boolean().default(false),
+    readOnly: z.boolean().default(false),
     defaultValue: z.unknown().optional(),
     validation: validationRulesSchema.optional(),
     conditional: z.array(conditionalRuleSchema).optional(),

@@ -98,7 +98,7 @@ export async function renderSection(
   const scopedCss = customCss ? scopeCustomCss(customCss, wrapperId) : '';
   const styleTag = scopedCss ? `<style>${scopedCss}</style>` : '';
 
-  return `<div id="${wrapperId}" class="zodyk-section zodyk-section--${instance.type}" data-section-id="${sectionId}">${styleTag}${innerHtml}</div>`;
+  return `<div id="${wrapperId}" class="zodyk-section zodyk-section--${instance.type}" data-section-id="${sectionId}" data-section-type="${instance.type}">${styleTag}${innerHtml}</div>`;
 }
 
 export async function renderSnippet(

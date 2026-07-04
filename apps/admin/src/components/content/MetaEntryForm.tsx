@@ -74,8 +74,8 @@ export function MetaEntryForm({
         if (groupFields.length === 0) return null;
 
         return (
-          <section key={group.key} className="rounded-lg border border-zinc-200 p-4">
-            <h3 className="mb-4 font-medium text-zinc-900">{group.label}</h3>
+          <section key={group.key} className="rounded-xl border border-border bg-card p-5">
+            <h3 className="mb-4 font-medium text-foreground">{group.label}</h3>
             <div className="flex flex-col gap-4">
               {groupFields.map((field) => {
                 if (field.localized && activeLocale !== defaultLocale) {
@@ -125,8 +125,8 @@ export function MetaEntryForm({
       })}
 
       {seoFields.length > 0 && (
-        <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-          <h3 className="mb-4 font-medium text-zinc-900">SEO</h3>
+        <section className="rounded-xl border border-border bg-muted/30 p-5">
+          <h3 className="mb-4 font-medium text-foreground">SEO</h3>
           <div className="flex flex-col gap-4">
             {seoFields.map((field) => (
               <DynamicFieldRenderer

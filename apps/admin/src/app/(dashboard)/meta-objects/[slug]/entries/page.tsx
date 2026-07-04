@@ -1,17 +1,17 @@
 'use client';
 
-import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@zodyk/shared-ui';
+import { Button } from '@zodyk/shared-ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  EntriesTable,
+  EntriesToolbar,
+  entryLabel,
+  type EntryRow,
+} from '@/components/meta-objects/entries-table';
+import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import { TableSkeleton } from '@/components/skeletons';
-
-interface EntryRow {
-  id: string;
-  status: string;
-  data: Record<string, unknown>;
-  updatedAt: string;
-}
 
 export default function MetaEntriesPage() {
   const params = useParams<{ slug: string }>();
@@ -20,11 +20,18 @@ export default function MetaEntriesPage() {
   const [typeName, setTypeName] = useState(slug);
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
+    const query = new URLSearchParams();
+    if (statusFilter) query.set('status', statusFilter);
+    if (search.trim()) query.set('search', search.trim());
+
+    setLoading(true);
     Promise.all([
       fetch(`/api/v1/meta-objects/${slug}`).then((r) => r.json()),
-      fetch(`/api/v1/meta-objects/${slug}/entries`).then((r) => r.json()),
+      fetch(`/api/v1/meta-objects/${slug}/entries?${query.toString()}`).then((r) => r.json()),
     ])
       .then(([type, result]) => {
         setTypeName(type.name ?? slug);
@@ -32,64 +39,51 @@ export default function MetaEntriesPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [slug]);
+  }, [slug, search, statusFilter]);
 
-  function entryLabel(data: Record<string, unknown>): string {
-    const candidate = data.title ?? data.name ?? data.quote;
-    return typeof candidate === 'string' ? candidate : JSON.stringify(data).slice(0, 40);
-  }
+  const filteredEntries = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return entries;
+    return entries.filter((entry) => entryLabel(entry.data).toLowerCase().includes(query));
+  }, [entries, search]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">{typeName} entries</h1>
-          <p className="text-zinc-600">Manage content entries for {slug}</p>
+          <PageBreadcrumbs
+            items={[
+              { label: 'Content', href: '/meta-objects' },
+              { label: 'Meta Objects', href: '/meta-objects' },
+              { label: typeName, href: `/meta-objects/${slug}` },
+              { label: 'Entries' },
+            ]}
+            className="mb-2"
+          />
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {typeName} entries
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage content entries for this meta object.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/meta-objects/${slug}`}>
-            <Button variant="outline">Edit schema</Button>
-          </Link>
-          <Link href={`/meta-objects/${slug}/entries/new`}>
-            <Button>New entry</Button>
-          </Link>
-        </div>
+        <Link href={`/meta-objects/${slug}`}>
+          <Button variant="outline">Edit schema</Button>
+        </Link>
       </div>
 
-      {loading ? <TableSkeleton rows={6} columns={4} /> : (
-        <div className="rounded-lg border border-zinc-200">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Updated</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entryLabel(entry.data)}</TableCell>
-                  <TableCell>
-                    <Badge variant={entry.status === 'published' ? 'success' : 'secondary'}>
-                      {entry.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{new Date(entry.updatedAt).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/meta-objects/${slug}/entries/${entry.id}`}
-                      className="text-sm text-zinc-600 hover:underline"
-                    >
-                      Edit
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+      <EntriesToolbar
+        slug={slug}
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+      />
+
+      {loading ? (
+        <TableSkeleton rows={6} columns={4} />
+      ) : (
+        <EntriesTable slug={slug} entries={filteredEntries} />
       )}
     </div>
   );

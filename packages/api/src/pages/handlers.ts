@@ -16,7 +16,6 @@ function serializePage(item: {
   handle: string;
   parentId?: { toString(): string };
   templateSuffix?: string;
-  isHomepage: boolean;
   body?: string;
   seo: Record<string, unknown>;
   status: string;
@@ -32,7 +31,6 @@ function serializePage(item: {
     handle: item.handle,
     parentId: item.parentId?.toString(),
     templateSuffix: item.templateSuffix,
-    isHomepage: item.isHomepage,
     body: item.body,
     seo: item.seo,
     status: item.status,
@@ -105,17 +103,12 @@ export async function createPage(session: AuthSession | null, body: unknown, ip?
   const existing = await Page.findOne({ slug: input.slug, tenantId: DEFAULT_TENANT_ID });
   if (existing) throw new AuthError('Page slug already exists', 409);
 
-  if (input.isHomepage) {
-    await Page.updateMany({ tenantId: DEFAULT_TENANT_ID }, { isHomepage: false });
-  }
-
   const item = await Page.create({
     title: input.title,
     slug: input.slug,
     handle: input.handle ?? slugToHandle(input.slug),
     parentId: input.parentId,
     templateSuffix: input.templateSuffix,
-    isHomepage: input.isHomepage,
     body: input.body,
     seo: input.seo ?? {},
     status: input.status,
@@ -159,18 +152,10 @@ export async function updatePage(
     item.slug = input.slug;
   }
 
-  if (input.isHomepage) {
-    await Page.updateMany(
-      { tenantId: DEFAULT_TENANT_ID, _id: { $ne: item._id } },
-      { isHomepage: false },
-    );
-  }
-
   if (input.title !== undefined) item.title = input.title;
   if (input.handle !== undefined) item.handle = input.handle;
   if (input.parentId !== undefined) item.parentId = input.parentId as never;
   if (input.templateSuffix !== undefined) item.templateSuffix = input.templateSuffix;
-  if (input.isHomepage !== undefined) item.isHomepage = input.isHomepage;
   if (input.body !== undefined) item.body = input.body;
   if (input.seo !== undefined) item.seo = input.seo as never;
   if (input.status !== undefined) item.status = input.status;

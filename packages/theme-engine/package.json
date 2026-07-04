@@ -17,6 +17,8 @@
     "@zodyk/core": "workspace:*",
     "@zodyk/database": "workspace:*",
     "@zodyk/liquid": "workspace:*",
+    "@zodyk/media": "workspace:*",
+    "jszip": "^3.10.1",
     "liquidjs": "^10.21.0"
   },
   "devDependencies": {

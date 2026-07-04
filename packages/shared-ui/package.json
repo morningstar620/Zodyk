@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./feedback": {
+      "types": "./src/components/feedback.tsx",
+      "default": "./src/components/feedback.tsx"
+    },
     "./globals.css": "./src/globals.css"
   },
   "scripts": {

@@ -1,7 +1,13 @@
 export { ThemeCustomizer } from './ThemeCustomizer';
-export { SectionTree } from './SectionTree';
-export { SettingsPanel } from './SettingsPanel';
-export { PreviewFrame } from './PreviewFrame';
-export { SectionSettingField } from './SectionSettingField';
-export { useCustomizerStore, groupSections } from './store';
-export type { PageOption, EditorMode, DeviceMode } from './store';
+export { CustomizerProvider, useCustomizerControls } from './providers/CustomizerProvider';
+export type { CustomizerControlOverrides, SettingControlProps } from './providers/CustomizerProvider';
+export { useCustomizerStore, groupSections, rebuildOrder } from './store';
+export type {
+  PageOption,
+  EditorMode,
+  DeviceMode,
+  SectionGroupName,
+  EditorMeta,
+  HoverTarget,
+  ThemeMeta,
+} from './store';

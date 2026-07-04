@@ -20,12 +20,15 @@ export interface IMediaAsset extends Document {
   originalFilename: string;
   mimeType: string;
   size: number;
+  width?: number;
+  height?: number;
   folder: string;
   r2Key: string;
   variants: IMediaVariant[];
   metadata: IMediaMetadata;
   uploadedBy?: Schema.Types.ObjectId;
   tenantId: string;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +50,8 @@ const mediaAssetSchema = new Schema<IMediaAsset>(
     originalFilename: { type: String, required: true, trim: true },
     mimeType: { type: String, required: true },
     size: { type: Number, required: true },
+    width: { type: Number },
+    height: { type: Number },
     folder: { type: String, required: true, default: '/' },
     r2Key: { type: String, required: true },
     variants: { type: [mediaVariantSchema], default: [] },
@@ -57,11 +62,13 @@ const mediaAssetSchema = new Schema<IMediaAsset>(
     },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     tenantId: { type: String, required: true, default: DEFAULT_TENANT_ID },
+    deletedAt: { type: Date },
   },
   { timestamps: true },
 );
 
 mediaAssetSchema.index({ tenantId: 1, folder: 1, createdAt: -1 });
+mediaAssetSchema.index({ tenantId: 1, deletedAt: 1, createdAt: -1 });
 mediaAssetSchema.index({ tenantId: 1, originalFilename: 1 });
 mediaAssetSchema.index({ tenantId: 1, mimeType: 1 });
 

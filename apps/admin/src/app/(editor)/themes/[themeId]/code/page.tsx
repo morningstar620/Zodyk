@@ -3,6 +3,7 @@
 import Editor from '@monaco-editor/react';
 import Link from 'next/link';
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import { Badge } from '@zodyk/shared-ui';
 
 interface ThemeFile {
   path: string;
@@ -86,6 +87,9 @@ export default function ThemeCodeEditorPage({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [themeName, setThemeName] = useState('');
+  const [themeStatus, setThemeStatus] = useState<'live' | 'draft' | 'archived'>('draft');
+  const [newFileOpen, setNewFileOpen] = useState(false);
+  const [newFilePath, setNewFilePath] = useState('');
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -103,6 +107,7 @@ export default function ThemeCodeEditorPage({
       .then((r) => r.json())
       .then((meta) => {
         setThemeName(meta.name);
+        setThemeStatus(meta.status ?? 'draft');
         setFiles(meta.files ?? []);
       });
   }, [themeId]);
@@ -116,6 +121,43 @@ export default function ThemeCodeEditorPage({
       : selectedPath?.endsWith('.js')
         ? 'javascript'
         : 'html';
+
+  async function handleDeleteFile() {
+    if (!selectedPath) return;
+    if (!confirm(`Delete ${selectedPath}?`)) return;
+    const res = await fetch(
+      `/api/v1/themes/${themeId}/files?path=${encodeURIComponent(selectedPath)}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'Failed to delete file');
+      return;
+    }
+    setFiles((prev) => prev.filter((f) => f !== selectedPath));
+    setSelectedPath(null);
+    setContent('');
+    setDirty(false);
+  }
+
+  async function handleCreateFile() {
+    const path = newFilePath.trim().replace(/^\/+/, '');
+    if (!path) return;
+    const res = await fetch(`/api/v1/themes/${themeId}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content: '' }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? 'Failed to create file');
+      return;
+    }
+    setFiles((prev) => [...prev, path].sort());
+    setNewFileOpen(false);
+    setNewFilePath('');
+    await loadFile(path);
+  }
 
   async function handleSave() {
     if (!selectedPath) return;
@@ -151,6 +193,9 @@ export default function ThemeCodeEditorPage({
             ← Themes
           </Link>
           <span className="text-sm font-medium text-zinc-900">{themeName}</span>
+          {themeStatus === 'live' && (
+            <Badge variant="success">Live — changes apply on save</Badge>
+          )}
           {selectedPath && (
             <span className="text-xs text-zinc-500">{selectedPath}</span>
           )}
@@ -164,6 +209,14 @@ export default function ThemeCodeEditorPage({
           </Link>
           <button
             type="button"
+            disabled={!selectedPath}
+            className="rounded px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
+            onClick={handleDeleteFile}
+          >
+            Delete file
+          </button>
+          <button
+            type="button"
             disabled={!dirty || saving || !selectedPath}
             className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             onClick={handleSave}
@@ -174,7 +227,42 @@ export default function ThemeCodeEditorPage({
       </header>
       <div className="flex min-h-0 flex-1">
         <aside className="w-56 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white p-2">
-          <p className="mb-2 px-2 text-xs font-semibold uppercase text-zinc-500">Explorer</p>
+          <div className="mb-2 flex items-center justify-between px-2">
+            <p className="text-xs font-semibold uppercase text-zinc-500">Explorer</p>
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:underline"
+              onClick={() => setNewFileOpen(true)}
+            >
+              + New
+            </button>
+          </div>
+          {newFileOpen && (
+            <div className="mb-2 space-y-1 rounded border border-zinc-200 p-2">
+              <input
+                className="w-full rounded border border-zinc-200 px-2 py-1 text-xs"
+                placeholder="sections/foo.liquid"
+                value={newFilePath}
+                onChange={(e) => setNewFilePath(e.target.value)}
+              />
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white"
+                  onClick={handleCreateFile}
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-2 py-0.5 text-xs text-zinc-600"
+                  onClick={() => setNewFileOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {Object.entries(tree).map(([name, node]) => (
             <TreeNode
               key={name}

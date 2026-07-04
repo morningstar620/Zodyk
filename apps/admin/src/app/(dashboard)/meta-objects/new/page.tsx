@@ -4,6 +4,7 @@ import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label }
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import { slugify } from '@/components/content/utils';
 
 export default function NewMetaObjectPage() {
@@ -43,8 +44,16 @@ export default function NewMetaObjectPage() {
   }
 
   return (
-    <div className="max-w-lg">
-      <h1 className="mb-6 text-2xl font-semibold text-zinc-900">Create meta object</h1>
+    <div className="mx-auto max-w-lg">
+      <PageBreadcrumbs
+        items={[
+          { label: 'Content', href: '/meta-objects' },
+          { label: 'Meta Objects', href: '/meta-objects' },
+          { label: 'New object' },
+        ]}
+        className="mb-2"
+      />
+      <h1 className="mb-6 text-2xl font-semibold text-foreground">Create meta object</h1>
       <Card>
         <CardHeader>
           <CardTitle>Type details</CardTitle>
@@ -71,7 +80,7 @@ export default function NewMetaObjectPage() {
               <Label>Description</Label>
               <Input value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               A default SEO field group will be added automatically.
             </p>
             <div className="flex gap-2">

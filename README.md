@@ -42,8 +42,8 @@ pnpm dev
 
 | App | URL |
 |-----|-----|
-| Admin panel | http://localhost:3000 |
-| Public website | http://localhost:3001 |
+| Admin panel | http://localhost:5001 |
+| Public website | http://localhost:5003 |
 
 ### 5. Build
 

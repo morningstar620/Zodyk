@@ -5,7 +5,9 @@ import { connectDatabase, getModels } from '@zodyk/database';
 export class MediaNotConfiguredError extends Error {
   code = 'MEDIA_NOT_CONFIGURED';
 
-  constructor(message = 'Media storage is not configured. Set up Cloudflare R2 in Settings.') {
+  constructor(
+    message = 'Object storage (R2) is required. Set up Cloudflare R2 in Settings or environment variables.',
+  ) {
     super(message);
     this.name = 'MediaNotConfiguredError';
   }
@@ -108,6 +110,32 @@ export async function requireR2Config(): Promise<ResolvedR2Config> {
     throw new MediaNotConfiguredError();
   }
   return config;
+}
+
+export async function requireR2PublicUrl(): Promise<string> {
+  const config = await requireR2Config();
+  if (!config.publicUrl) {
+    throw new MediaNotConfiguredError(
+      'R2_PUBLIC_URL is required for theme assets and media delivery.',
+    );
+  }
+  return config.publicUrl.replace(/\/$/, '');
+}
+
+/** Full storage config required for themes and media writes. */
+export async function requireStorageConfig(): Promise<ResolvedR2Config & { publicUrl: string }> {
+  const config = await requireR2Config();
+  if (!config.publicUrl) {
+    throw new MediaNotConfiguredError(
+      'R2_PUBLIC_URL is required for theme assets and media delivery.',
+    );
+  }
+  return { ...config, publicUrl: config.publicUrl.replace(/\/$/, '') };
+}
+
+export async function isStorageFullyConfigured(): Promise<boolean> {
+  const config = await getR2Config();
+  return config !== null && Boolean(config.publicUrl);
 }
 
 export async function getR2ConfigSource(): Promise<'env' | 'db' | null> {

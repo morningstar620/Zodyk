@@ -7,17 +7,31 @@ import {
   type ThemeHealthIssue,
 } from '@zodyk/core';
 import { connectDatabase, getModels } from '@zodyk/database';
+import { requireStorageConfig } from '@zodyk/media';
 import type { Types } from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { checksum, filesToMap, readThemeDirectory } from './install';
 import {
+  PROTECTED_THEME_PATHS,
+  deleteThemeObject,
+  deleteThemePrefix,
+  ensureThemeStoragePrefix,
+  guessContentType,
+  readThemeObjectContent,
+  themeStoragePrefix,
+  writeThemeObject,
+} from './r2-storage';
+import {
   listSectionTypes,
   loadThemeSettings,
   parseAllSectionSchemas,
+  parseSectionSchemasForTypes,
+  getSectionTypesFromTemplate,
   renderThemedPage,
 } from './renderer';
 import type { RenderContextInput } from './renderer';
 import { createLiquidEngine, renderSection } from '@zodyk/liquid';
+import { buildThemeZip, buildThemeZipFilename, extractThemeZip, type ThemeZipFile } from './zip';
 
 export interface LoadedTheme {
   id: string;
@@ -45,18 +59,46 @@ export interface ThemeListItem {
   updatedAt: Date;
 }
 
-function guessContentType(path: string): string {
-  if (path.endsWith('.json')) return 'application/json';
-  if (path.endsWith('.css')) return 'text/css';
-  if (path.endsWith('.js')) return 'application/javascript';
-  if (path.endsWith('.liquid')) return 'text/x-liquid';
-  return 'text/plain';
+const THEME_CACHE_TTL_MS = 60_000;
+const themeCache = new Map<string, { theme: LoadedTheme; cachedAt: number }>();
+
+function themeCacheKey(themeId: string, tenantId: string, updatedAt: string): string {
+  return `${tenantId}:${themeId}:${updatedAt}`;
+}
+
+export function invalidateThemeCache(themeId: string, tenantId = DEFAULT_TENANT_ID): void {
+  const prefix = `${tenantId}:${themeId}:`;
+  for (const key of themeCache.keys()) {
+    if (key.startsWith(prefix)) themeCache.delete(key);
+  }
+}
+
+async function ensureDb() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('MONGODB_URI is required');
+  await connectDatabase(uri);
+  await requireStorageConfig();
+  return getModels();
+}
+
+export async function assertOneLiveTheme(tenantId = DEFAULT_TENANT_ID): Promise<void> {
+  const { Theme } = await ensureDb();
+  const liveCount = await Theme.countDocuments({ tenantId, status: 'live' });
+  if (liveCount !== 1) {
+    throw new Error(`Expected exactly one live theme, found ${liveCount}`);
+  }
 }
 
 async function loadThemeFiles(themeId: Types.ObjectId | string): Promise<Record<string, string>> {
-  const { ThemeFile } = getModels();
+  const { ThemeFile } = await ensureDb();
   const themeFiles = await ThemeFile.find({ themeId }).lean();
-  return filesToMap(themeFiles.map((f) => ({ path: f.path, content: f.content })));
+  const entries = await Promise.all(
+    themeFiles.map(async (f) => {
+      const content = await readThemeObjectContent(f.r2Key, f.content);
+      return { path: f.path, content };
+    }),
+  );
+  return filesToMap(entries);
 }
 
 function toLoadedTheme(
@@ -82,34 +124,76 @@ function toLoadedTheme(
   };
 }
 
+async function installThemeFiles(
+  theme: {
+    _id: Types.ObjectId;
+    tenantId: string;
+    storagePrefix?: string;
+  },
+  files: ThemeZipFile[],
+): Promise<void> {
+  const { Theme, ThemeFile } = await ensureDb();
+  const tenantId = theme.tenantId;
+  const themeId = theme._id.toString();
+  const prefix = themeStoragePrefix(tenantId, themeId);
+
+  if (!theme.storagePrefix) {
+    await Theme.updateOne({ _id: theme._id }, { storagePrefix: prefix });
+  }
+
+  const existing = await ThemeFile.find({ themeId: theme._id }).lean();
+  if (existing.length > 0) {
+    const oldPrefix = ensureThemeStoragePrefix(theme);
+    await deleteThemePrefix(oldPrefix);
+    await ThemeFile.deleteMany({ themeId: theme._id });
+  }
+
+  const rows = [];
+  for (const file of files) {
+    const stored = await writeThemeObject(tenantId, themeId, file.path, file.content);
+    rows.push({
+      themeId: theme._id,
+      path: file.path,
+      r2Key: stored.r2Key,
+      size: stored.size,
+      checksum: stored.checksum,
+      contentType: stored.contentType,
+    });
+  }
+
+  if (rows.length > 0) {
+    await ThemeFile.insertMany(rows);
+  }
+}
+
 export async function loadThemeById(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<LoadedTheme | null> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme } = getModels();
-
+  const { Theme } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
   if (!theme) return null;
 
+  const updatedAt = theme.updatedAt?.toISOString() ?? '';
+  const cacheKey = themeCacheKey(themeId, tenantId, updatedAt);
+  const cached = themeCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < THEME_CACHE_TTL_MS) {
+    return cached.theme;
+  }
+
   const files = await loadThemeFiles(theme._id);
-  return toLoadedTheme(theme, files);
+  const loaded = toLoadedTheme(theme, files);
+  themeCache.set(cacheKey, { theme: loaded, cachedAt: Date.now() });
+  return loaded;
 }
 
 export async function loadActiveTheme(tenantId = DEFAULT_TENANT_ID): Promise<LoadedTheme | null> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme } = getModels();
-
+  const { Theme } = await ensureDb();
   const theme = await Theme.findOne({
     tenantId,
     $or: [{ status: 'live' }, { isActive: true }],
   }).lean();
   if (!theme) return null;
-
   const files = await loadThemeFiles(theme._id);
   return toLoadedTheme(theme, files);
 }
@@ -119,14 +203,9 @@ export async function loadThemeByPreview(
   previewToken: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<LoadedTheme | null> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme } = getModels();
-
+  const { Theme } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId, previewToken }).lean();
   if (!theme) return null;
-
   const files = await loadThemeFiles(theme._id);
   return toLoadedTheme(theme, files);
 }
@@ -135,13 +214,10 @@ export async function installThemeFromDirectory(
   dir: string,
   options: { name: string; slug: string; version?: string; activate?: boolean; tenantId?: string },
 ): Promise<{ themeId: string }> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
+  const { Theme } = await ensureDb();
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
-
   const files = await readThemeDirectory(dir);
+
   let theme = await Theme.findOne({ tenantId, slug: options.slug });
   if (!theme) {
     theme = await Theme.create({
@@ -151,6 +227,7 @@ export async function installThemeFromDirectory(
       status: options.activate ? 'live' : 'draft',
       isActive: Boolean(options.activate),
       tenantId,
+      storagePrefix: '',
       previewToken: randomBytes(24).toString('hex'),
       publishedAt: options.activate ? new Date() : undefined,
       lastSavedAt: new Date(),
@@ -158,18 +235,9 @@ export async function installThemeFromDirectory(
   } else {
     theme.version = options.version ?? theme.version;
     await theme.save();
-    await ThemeFile.deleteMany({ themeId: theme._id });
   }
 
-  await ThemeFile.insertMany(
-    files.map((file) => ({
-      themeId: theme!._id,
-      path: file.path,
-      content: file.content,
-      checksum: checksum(file.content),
-      contentType: file.contentType,
-    })),
-  );
+  await installThemeFiles(theme, files);
 
   if (options.activate) {
     await Theme.updateMany(
@@ -182,7 +250,50 @@ export async function installThemeFromDirectory(
     await theme.save();
   }
 
+  await assertOneLiveTheme(tenantId);
   return { themeId: theme._id.toString() };
+}
+
+export async function installThemeFromZip(
+  buffer: Buffer,
+  options: { name: string; slug: string; version?: string; tenantId?: string },
+): Promise<{ themeId: string }> {
+  const { Theme } = await ensureDb();
+  const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
+  const files = await extractThemeZip(buffer);
+
+  const theme = await Theme.create({
+    name: options.name,
+    slug: options.slug,
+    version: options.version ?? '1.0.0',
+    status: 'draft',
+    isActive: false,
+    tenantId,
+    storagePrefix: '',
+    previewToken: randomBytes(24).toString('hex'),
+    lastSavedAt: new Date(),
+  });
+
+  await installThemeFiles(theme, files);
+  return { themeId: theme._id.toString() };
+}
+
+export async function exportThemeAsZip(
+  themeId: string,
+  tenantId = DEFAULT_TENANT_ID,
+): Promise<{ buffer: Buffer; filename: string; name: string }> {
+  const { Theme } = await ensureDb();
+  const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
+  if (!theme) throw new Error('Theme not found');
+
+  const files = await loadThemeFiles(theme._id);
+  const entries = Object.entries(files).map(([path, content]) => ({ path, content }));
+  const buffer = await buildThemeZip(entries);
+  return {
+    buffer,
+    filename: buildThemeZipFilename(theme.name),
+    name: theme.name,
+  };
 }
 
 export async function activateTheme(themeId: string, tenantId = DEFAULT_TENANT_ID): Promise<void> {
@@ -190,39 +301,27 @@ export async function activateTheme(themeId: string, tenantId = DEFAULT_TENANT_I
 }
 
 export async function publishTheme(themeId: string, tenantId = DEFAULT_TENANT_ID): Promise<void> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme } = getModels();
-
+  const { Theme } = await ensureDb();
   const draft = await Theme.findOne({ _id: themeId, tenantId });
   if (!draft) throw new Error('Theme not found');
   if (draft.status === 'live') return;
 
-  await Theme.updateMany(
-    { tenantId, status: 'live' },
-    { status: 'archived', isActive: false },
-  );
+  await Theme.updateMany({ tenantId, status: 'live' }, { status: 'archived', isActive: false });
 
   draft.status = 'live';
   draft.isActive = true;
   draft.publishedAt = new Date();
   await draft.save();
+  await assertOneLiveTheme(tenantId);
 }
 
 export async function duplicateTheme(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<{ themeId: string }> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
-
+  const { Theme } = await ensureDb();
   const source = await Theme.findOne({ _id: themeId, tenantId });
   if (!source) throw new Error('Theme not found');
-
-  const sourceFiles = await ThemeFile.find({ themeId: source._id }).lean();
   const suffix = Date.now().toString(36);
   const newSlug = `${source.slug}-copy-${suffix}`;
 
@@ -238,40 +337,37 @@ export async function duplicateTheme(
     lastSavedAt: new Date(),
   });
 
-  if (sourceFiles.length > 0) {
-    await ThemeFile.insertMany(
-      sourceFiles.map((f) => ({
-        themeId: copy._id,
-        path: f.path,
-        content: f.content,
-        checksum: f.checksum,
-        contentType: f.contentType,
-      })),
-    );
-  }
+  const filesMap = await loadThemeFiles(source._id);
+  const zipFiles = Object.entries(filesMap).map(([path, content]) => ({
+    path,
+    content,
+    contentType: guessContentType(path),
+  }));
+  await installThemeFiles(copy, zipFiles);
 
   return { themeId: copy._id.toString() };
 }
 
 export async function deleteTheme(themeId: string, tenantId = DEFAULT_TENANT_ID): Promise<void> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
-
+  const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId });
   if (!theme) throw new Error('Theme not found');
   if (theme.status === 'live') throw new Error('Cannot delete the live theme');
 
+  const themeCount = await Theme.countDocuments({ tenantId });
+  if (themeCount <= 1) {
+    throw new Error('Cannot delete the only theme');
+  }
+
+  const prefix = ensureThemeStoragePrefix(theme);
+  await deleteThemePrefix(prefix);
   await ThemeFile.deleteMany({ themeId: theme._id });
   await Theme.deleteOne({ _id: theme._id });
+  await assertOneLiveTheme(tenantId);
 }
 
 export async function listThemes(tenantId = DEFAULT_TENANT_ID): Promise<ThemeListItem[]> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme } = getModels();
+  const { Theme } = await ensureDb();
   const items = await Theme.find({ tenantId }).sort({ status: 1, name: 1 }).lean();
   return items.map((t) => ({
     id: t._id.toString(),
@@ -290,11 +386,7 @@ export async function listThemes(tenantId = DEFAULT_TENANT_ID): Promise<ThemeLis
 }
 
 export async function getThemeMetadata(themeId: string, tenantId = DEFAULT_TENANT_ID) {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
-
+  const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
   if (!theme) return null;
 
@@ -327,18 +419,15 @@ export async function getThemeFile(
   path: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<{ path: string; content: string; contentType: string } | null> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
-
+  const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
   if (!theme) return null;
 
   const file = await ThemeFile.findOne({ themeId: theme._id, path }).lean();
   if (!file) return null;
 
-  return { path: file.path, content: file.content, contentType: file.contentType };
+  const content = await readThemeObjectContent(file.r2Key, file.content);
+  return { path: file.path, content, contentType: file.contentType };
 }
 
 export async function upsertThemeFile(
@@ -346,47 +435,61 @@ export async function upsertThemeFile(
   path: string,
   content: string,
   tenantId = DEFAULT_TENANT_ID,
-): Promise<void> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
-
+): Promise<{ isLive: boolean }> {
+  const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId });
   if (!theme) throw new Error('Theme not found');
+
+  const stored = await writeThemeObject(tenantId, themeId, path, content);
+
+  if (!theme.storagePrefix) {
+    theme.storagePrefix = themeStoragePrefix(tenantId, themeId);
+  }
 
   await ThemeFile.findOneAndUpdate(
     { themeId: theme._id, path },
     {
-      themeId: theme._id,
-      path,
-      content,
-      checksum: checksum(content),
-      contentType: guessContentType(path),
+      $set: {
+        themeId: theme._id,
+        path,
+        r2Key: stored.r2Key,
+        size: stored.size,
+        checksum: stored.checksum,
+        contentType: stored.contentType,
+      },
+      $unset: { content: '' },
     },
     { upsert: true, new: true },
   );
 
   theme.lastSavedAt = new Date();
   await theme.save();
+  invalidateThemeCache(themeId, tenantId);
+  return { isLive: theme.status === 'live' };
 }
 
 export async function deleteThemeFile(
   themeId: string,
   path: string,
   tenantId = DEFAULT_TENANT_ID,
-): Promise<void> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile } = getModels();
+): Promise<{ isLive: boolean }> {
+  if (PROTECTED_THEME_PATHS.has(path)) {
+    throw new Error(`Cannot delete required theme file: ${path}`);
+  }
 
+  const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId });
   if (!theme) throw new Error('Theme not found');
 
+  const file = await ThemeFile.findOne({ themeId: theme._id, path });
+  if (!file) throw new Error('File not found');
+
+  await deleteThemeObject(file.r2Key);
   await ThemeFile.deleteOne({ themeId: theme._id, path });
+
   theme.lastSavedAt = new Date();
   await theme.save();
+  return { isLive: theme.status === 'live' };
 }
 
 export async function getTemplateJson(
@@ -394,7 +497,10 @@ export async function getTemplateJson(
   templatePath: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<TemplateJson | null> {
-  const file = await getThemeFile(themeId, templatePath, tenantId);
+  const normalizedPath = templatePath.startsWith('templates/')
+    ? templatePath
+    : `templates/${templatePath}`;
+  const file = await getThemeFile(themeId, normalizedPath, tenantId);
   if (!file) return null;
   return templateJsonSchema.parse(JSON.parse(file.content));
 }
@@ -415,17 +521,31 @@ export async function updateThemeSettingsForTheme(
   themeId: string,
   values: Record<string, unknown>,
   tenantId = DEFAULT_TENANT_ID,
-): Promise<Record<string, unknown>> {
+): Promise<{ settings: Record<string, unknown>; isLive: boolean }> {
   const content = JSON.stringify({ current: values }, null, 2);
-  await upsertThemeFile(themeId, 'config/settings.json', content, tenantId);
-  return values;
+  const result = await upsertThemeFile(themeId, 'config/settings.json', content, tenantId);
+  return { settings: values, isLive: result.isLive };
 }
 
-export async function getThemeSchemas(themeId: string, tenantId = DEFAULT_TENANT_ID) {
+export async function getThemeSchemas(
+  themeId: string,
+  tenantId = DEFAULT_TENANT_ID,
+  options?: { sectionTypes?: string[]; scope?: 'all' | 'template' },
+) {
   const theme = await loadThemeById(themeId, tenantId);
   if (!theme) throw new Error('Theme not found');
 
-  const sectionSchemas = parseAllSectionSchemas(theme.files);
+  const allTypes = listSectionTypes(theme.files);
+  const typesToParse =
+    options?.scope === 'all' || !options?.sectionTypes?.length
+      ? allTypes
+      : options.sectionTypes;
+
+  const sectionSchemas =
+    options?.scope === 'all' || !options?.sectionTypes?.length
+      ? parseAllSectionSchemas(theme.files)
+      : parseSectionSchemasForTypes(theme.files, typesToParse);
+
   const settingsSchemaRaw = theme.files['config/settings_schema.json'];
   let settingsSchema: unknown[] = [];
   if (settingsSchemaRaw) {
@@ -437,6 +557,108 @@ export async function getThemeSchemas(themeId: string, tenantId = DEFAULT_TENANT
   }
 
   return {
+    sectionSchemas,
+    sectionTypes: allTypes,
+    settingsSchema,
+    settings: theme.settings,
+  };
+}
+
+export async function getCustomizerBootstrap(
+  themeId: string,
+  tenantId = DEFAULT_TENANT_ID,
+  options?: { pathname?: string },
+) {
+  const theme = await loadThemeById(themeId, tenantId);
+  if (!theme) throw new Error('Theme not found');
+
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error('MONGODB_URI is required');
+  await connectDatabase(uri);
+  const { Page, MetaObjectDefinition } = getModels();
+
+  const [pages, metaObjects] = await Promise.all([
+    Page.find({ tenantId, status: 'published' }).lean(),
+    MetaObjectDefinition.find({ tenantId, status: 'active' }).lean(),
+  ]);
+
+  const pageItems: Array<{
+    id: string;
+    label: string;
+    templatePath: string;
+    pathname: string;
+    group: string;
+  }> = [
+    { id: 'home', label: 'Home page', templatePath: 'templates/index.json', pathname: '/', group: 'Pages' },
+    { id: '404', label: '404', templatePath: 'templates/404.json', pathname: '/not-found', group: 'System' },
+  ];
+
+  for (const page of pages) {
+    const suffix = page.templateSuffix;
+    const templatePath = suffix ? `templates/page.${suffix}.json` : 'templates/page.json';
+    pageItems.push({
+      id: page._id.toString(),
+      label: page.title,
+      templatePath,
+      pathname: `/${page.slug}`,
+      group: 'Pages',
+    });
+  }
+
+  for (const mo of metaObjects) {
+    const key = mo.templates?.templateKey ?? mo.slug;
+    const archivePath = mo.routing?.archivePath ?? `/${mo.slug}`;
+    pageItems.push({
+      id: `${mo.slug}-archive`,
+      label: `${mo.name} archive`,
+      templatePath: `templates/${key}.archive.json`,
+      pathname: archivePath,
+      group: 'Meta objects',
+    });
+    pageItems.push({
+      id: `${mo.slug}-single`,
+      label: `${mo.singularName ?? mo.name} single`,
+      templatePath: `templates/${key}.single.json`,
+      pathname: archivePath,
+      group: 'Meta objects',
+    });
+  }
+
+  const homePage =
+    pageItems.find((item) => item.templatePath === 'templates/index.json') ?? pageItems[0] ?? null;
+  const pathname = options?.pathname ?? homePage?.pathname ?? '/';
+  const selectedPage = pageItems.find((item) => item.pathname === pathname) ?? homePage;
+
+  let template: TemplateJson | null = null;
+  if (selectedPage) {
+    template = await getTemplateJson(themeId, selectedPage.templatePath, tenantId);
+  }
+
+  const sectionTypesInTemplate = template ? getSectionTypesFromTemplate(template) : [];
+  const sectionSchemas = parseSectionSchemasForTypes(theme.files, sectionTypesInTemplate);
+
+  const settingsSchemaRaw = theme.files['config/settings_schema.json'];
+  let settingsSchema: unknown[] = [];
+  if (settingsSchemaRaw) {
+    try {
+      settingsSchema = themeSettingsSchemaSchema.parse(JSON.parse(settingsSchemaRaw));
+    } catch {
+      settingsSchema = [];
+    }
+  }
+
+  return {
+    theme: {
+      id: theme.id,
+      name: theme.name,
+      slug: theme.slug,
+      version: theme.version,
+      status: theme.status,
+      previewToken: theme.previewToken,
+    },
+    pages: pageItems,
+    page: selectedPage,
+    template,
     sectionSchemas,
     sectionTypes: listSectionTypes(theme.files),
     settingsSchema,
@@ -454,10 +676,7 @@ export async function saveTemplateCustomization(
   },
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { TemplateCustomization } = getModels();
+  const { TemplateCustomization } = await ensureDb();
 
   const item = await TemplateCustomization.findOneAndUpdate(
     {
@@ -486,10 +705,7 @@ export async function getThemeHealth(themeId?: string, tenantId = DEFAULT_TENANT
   issues: ThemeHealthIssue[];
   themeId: string | null;
 }> {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { Theme, ThemeFile, MetaObjectDefinition } = getModels();
+  const { Theme, ThemeFile, MetaObjectDefinition } = await ensureDb();
 
   const theme = themeId
     ? await Theme.findOne({ _id: themeId, tenantId }).lean()
@@ -499,7 +715,7 @@ export async function getThemeHealth(themeId?: string, tenantId = DEFAULT_TENANT
 
   const themeFiles = await ThemeFile.find({ themeId: theme._id }).lean();
   const filePaths = themeFiles.map((f) => f.path);
-  const filesMap = filesToMap(themeFiles.map((f) => ({ path: f.path, content: f.content })));
+  const filesMap = await loadThemeFiles(theme._id);
 
   const metaObjects = await MetaObjectDefinition.find({ tenantId, status: 'active' }).lean();
   const issues = auditThemeHealth({
@@ -542,10 +758,7 @@ export async function getTemplateCustomization(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  const { TemplateCustomization } = getModels();
+  const { TemplateCustomization } = await ensureDb();
   const item = await TemplateCustomization.findOne({
     tenantId,
     themeId,

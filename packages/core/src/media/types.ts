@@ -14,12 +14,25 @@ export interface MediaMetadata {
   caption?: string;
 }
 
+export type ImageOutputFormat = 'webp' | 'avif' | 'jpeg' | 'png';
+
+export type TransformOp =
+  | { type: 'resize'; width?: number; height?: number; fit?: 'cover' | 'contain' | 'inside' }
+  | { type: 'crop'; left: number; top: number; width: number; height: number }
+  | { type: 'rotate'; angle: number }
+  | { type: 'flip'; axis: 'horizontal' | 'vertical' }
+  | { type: 'compress'; quality: number; format?: ImageOutputFormat }
+  | { type: 'convert'; format: ImageOutputFormat }
+  | { type: 'stripMetadata' };
+
 export interface MediaAsset {
   id: string;
   filename: string;
   originalFilename: string;
   mimeType: string;
   size: number;
+  width?: number;
+  height?: number;
   folder: string;
   r2Key: string;
   variants: MediaVariant[];
@@ -27,8 +40,21 @@ export interface MediaAsset {
   uploadedBy?: string;
   url: string;
   variantUrls?: Partial<Record<MediaVariantFormat, string>>;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface MediaStorageStats {
+  totalBytes: number;
+  totalCount: number;
+  imagesBytes: number;
+  imagesCount: number;
+  videoBytes: number;
+  videoCount: number;
+  documentsBytes: number;
+  documentsCount: number;
+  quotaBytes: number;
 }
 
 export interface R2SettingsPublic {

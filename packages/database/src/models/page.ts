@@ -9,7 +9,6 @@ export interface IPage extends Document {
   handle: string;
   parentId?: Types.ObjectId;
   templateSuffix?: string;
-  isHomepage: boolean;
   body?: string;
   seo: {
     metaTitle?: string;
@@ -32,7 +31,6 @@ const pageSchema = new Schema<IPage>(
     handle: { type: String, required: true, trim: true, lowercase: true },
     parentId: { type: Schema.Types.ObjectId, ref: 'Page' },
     templateSuffix: { type: String, trim: true },
-    isHomepage: { type: Boolean, default: false },
     body: { type: String },
     seo: {
       metaTitle: { type: String },
@@ -54,7 +52,7 @@ const pageSchema = new Schema<IPage>(
 
 pageSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 pageSchema.index({ tenantId: 1, handle: 1 });
-pageSchema.index({ tenantId: 1, status: 1, isHomepage: 1 });
+pageSchema.index({ tenantId: 1, status: 1 });
 pageSchema.index({ tenantId: 1, parentId: 1 });
 
 export type PageModel = Model<IPage>;

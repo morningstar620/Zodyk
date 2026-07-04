@@ -1,0 +1,77 @@
+<section class="slideshow">
+  <div class="slideshow__track">
+    {% for block in section.blocks %}
+      <div class="slideshow__slide" {{ block | zodyk_block_attributes: section.id }}>
+        {% if block.settings.heading != blank %}
+          <h2 class="slideshow__heading">{{ block.settings.heading }}</h2>
+        {% endif %}
+        {% if block.settings.text != blank %}
+          <p class="slideshow__text">{{ block.settings.text }}</p>
+        {% endif %}
+        {% if block.settings.button_text != blank and block.settings.button_url != blank %}
+          {% render 'button', text: block.settings.button_text, url: block.settings.button_url %}
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Slideshow",
+  "category": "Banners",
+  "description": "Main hero section with rotating slides",
+  "settings": [
+    { "type": "header", "content": "Layout" },
+    {
+      "type": "select",
+      "id": "layout",
+      "label": "Layout",
+      "options": [
+        { "value": "full", "label": "Full width" },
+        { "value": "page", "label": "Page" }
+      ],
+      "default": "full"
+    },
+    {
+      "type": "range",
+      "id": "slide_speed",
+      "label": "Change slides every",
+      "min": 2,
+      "max": 10,
+      "step": 1,
+      "unit": "s",
+      "default": 5
+    },
+    { "type": "header", "content": "Accessibility" },
+    {
+      "type": "text",
+      "id": "description",
+      "label": "Slideshow description",
+      "info": "Describe the slideshow for screen readers",
+      "default": "Slideshow about our brand"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "slide",
+      "name": "Slide",
+      "limit": 8,
+      "settings": [
+        { "type": "text", "id": "heading", "label": "Heading", "default": "Browse our latest products" },
+        { "type": "textarea", "id": "text", "label": "Text" },
+        { "type": "text", "id": "button_text", "label": "Button text", "default": "Shop all" },
+        { "type": "url", "id": "button_url", "label": "Button URL", "default": "/pages/catalog" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Slideshow",
+      "blocks": [
+        { "type": "slide", "settings": { "heading": "Browse our latest products", "button_text": "Shop all", "button_url": "/" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

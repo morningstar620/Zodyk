@@ -1,12 +1,14 @@
 'use client';
 
 import type { MetaFieldDefinition, MetaFieldGroup } from '@zodyk/core';
-import { Alert, Button, Input, Label } from '@zodyk/shared-ui';
+import { Alert, Button } from '@zodyk/shared-ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FieldBuilder } from '@/components/content/FieldBuilder';
-import { FieldGroupEditor } from '@/components/content/FieldGroupEditor';
+import { ApiEndpointsCard } from '@/components/meta-objects/api-endpoints-card';
+import { MetaFieldsList } from '@/components/meta-objects/meta-fields-list';
+import { ObjectSettingsCard } from '@/components/meta-objects/object-settings-card';
+import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import { MetaSchemaSkeleton } from '@/components/skeletons';
 
 interface RoutingConfig {
@@ -25,6 +27,7 @@ export default function EditMetaObjectPage() {
   const slug = params.slug;
 
   const [name, setName] = useState('');
+  const [status, setStatus] = useState('active');
   const [fieldGroups, setFieldGroups] = useState<MetaFieldGroup[]>([]);
   const [fields, setFields] = useState<MetaFieldDefinition[]>([]);
   const [routing, setRouting] = useState<RoutingConfig>({
@@ -46,6 +49,7 @@ export default function EditMetaObjectPage() {
     ])
       .then(([item, types]) => {
         setName(item.name);
+        setStatus(item.status ?? 'active');
         setFieldGroups(item.fieldGroups ?? []);
         setFields(item.fields ?? []);
         if (item.routing) setRouting(item.routing);
@@ -67,7 +71,14 @@ export default function EditMetaObjectPage() {
     const res = await fetch(`/api/v1/meta-objects/${slug}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fieldGroups, fields, routing, templates }),
+      body: JSON.stringify({
+        name,
+        status,
+        fieldGroups,
+        fields,
+        routing,
+        templates,
+      }),
     });
     if (!res.ok) {
       const json = await res.json();
@@ -80,20 +91,32 @@ export default function EditMetaObjectPage() {
 
   if (loading) return <MetaSchemaSkeleton />;
 
-  const userGroups = fieldGroups
-    .filter((g) => !g.isSystem)
-    .sort((a, b) => a.order - b.order);
+  const contentGroup = fieldGroups.find((g) => g.key === 'content') ?? fieldGroups[0];
+  const userFieldCount = fields.filter((f) => !f.isSystem).length;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">{name}</h1>
-          <p className="text-zinc-600">Edit schema for {slug}</p>
+          <PageBreadcrumbs
+            items={[
+              { label: 'Content', href: '/meta-objects' },
+              { label: 'Meta Objects', href: '/meta-objects' },
+              { label: name },
+            ]}
+            className="mb-2"
+          />
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Schema and configuration · {userFieldCount} fields
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/meta-objects/${slug}/entries`}>
-            <Button variant="outline">View entries</Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/meta-objects/${slug}/entries`}
+            className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            View entries
           </Link>
           <Button onClick={save} disabled={saving}>
             Save schema
@@ -103,68 +126,29 @@ export default function EditMetaObjectPage() {
 
       {error && <Alert variant="destructive">{error}</Alert>}
 
-      <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4">
-        <h2 className="text-lg font-medium">Theme templates & routing</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <Label htmlFor="templateKey">Template key</Label>
-            <Input
-              id="templateKey"
-              value={templates.templateKey ?? ''}
-              onChange={(e) => setTemplates({ ...templates, templateKey: e.target.value })}
-              placeholder={slug}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {contentGroup && (
+            <MetaFieldsList
+              groupKey={contentGroup.key}
+              fields={fields}
+              onChange={setFields}
+              metaObjectSlugs={allTypes.filter((t) => t.slug !== slug)}
             />
-            <p className="mt-1 text-xs text-zinc-500">
-              Maps to templates/{'{templateKey}'}.archive.json and .single.json
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="archivePath">Archive path</Label>
-            <Input
-              id="archivePath"
-              value={routing.archivePath ?? ''}
-              onChange={(e) => setRouting({ ...routing, archivePath: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="singlePath">Single path pattern</Label>
-            <Input
-              id="singlePath"
-              value={routing.singlePath ?? ''}
-              onChange={(e) => setRouting({ ...routing, singlePath: e.target.value })}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm md:col-span-2">
-            <input
-              type="checkbox"
-              checked={routing.archiveEnabled}
-              onChange={(e) => setRouting({ ...routing, archiveEnabled: e.target.checked })}
-            />
-            Enable archive template
-          </label>
+          )}
         </div>
-      </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-medium">Field groups</h2>
-        <FieldGroupEditor groups={fieldGroups} onChange={setFieldGroups} />
-      </section>
-
-      {userGroups.map((group) => (
-        <section key={group.key} className="flex flex-col gap-4">
-          <h2 className="text-lg font-medium">{group.label} fields</h2>
-          <FieldBuilder
-            groupKey={group.key}
-            fields={fields}
-            onChange={setFields}
-            metaObjectSlugs={allTypes.filter((t) => t.slug !== slug)}
+        <div className="space-y-4">
+          <ObjectSettingsCard
+            name={name}
+            slug={slug}
+            publicApi={status === 'active'}
+            onNameChange={setName}
+            onPublicApiChange={(enabled) => setStatus(enabled ? 'active' : 'draft')}
           />
-        </section>
-      ))}
-
-      <Link href="/meta-objects" className="text-sm text-zinc-600 hover:underline">
-        Back to meta objects
-      </Link>
+          <ApiEndpointsCard slug={slug} />
+        </div>
+      </div>
     </div>
   );
 }

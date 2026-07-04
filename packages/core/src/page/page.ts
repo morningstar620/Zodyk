@@ -24,7 +24,6 @@ export const createPageSchema = z.object({
     .optional(),
   parentId: z.string().optional(),
   templateSuffix: z.string().max(50).optional(),
-  isHomepage: z.boolean().default(false),
   body: z.string().optional(),
   seo: pageSeoSchema.optional(),
   status: pageStatusSchema.default('draft'),

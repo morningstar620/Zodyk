@@ -11,7 +11,6 @@ interface PageRow {
   slug: string;
   status: string;
   templateSuffix?: string;
-  isHomepage: boolean;
 }
 
 interface PagesResponse {
@@ -51,16 +50,11 @@ export default function PagesListPage() {
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {item.title}
-                    {item.isHomepage && (
-                      <Badge variant="secondary" className="ml-2">
-                        Home
-                      </Badge>
-                    )}
-                  </TableCell>
+                  <TableCell className="font-medium">{item.title}</TableCell>
                   <TableCell>/{item.slug}</TableCell>
-                  <TableCell>{item.templateSuffix ? `page.${item.templateSuffix}` : 'page'}</TableCell>
+                  <TableCell>
+                    {item.templateSuffix ? `page.${item.templateSuffix}.json` : 'page.json'}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={item.status === 'published' ? 'success' : 'secondary'}>
                       {item.status}

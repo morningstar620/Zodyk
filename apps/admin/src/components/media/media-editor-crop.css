@@ -1,0 +1,127 @@
+.editor-preview-canvas {
+  background-size: 18px 18px;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-foreground) 12%, transparent) 1px,
+    transparent 1px
+  );
+}
+
+.editor-react-crop {
+  display: inline-block;
+  max-width: calc(100% - 3rem);
+  max-height: calc(100vh - 7rem);
+  margin: 1.5rem;
+}
+
+.editor-react-crop .ReactCrop__child-wrapper {
+  line-height: 0;
+}
+
+.editor-react-crop .ReactCrop__child-wrapper > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 7rem);
+}
+
+.editor-react-crop .ReactCrop__crop-mask {
+  position: absolute;
+  inset: 0;
+}
+
+.editor-react-crop .ReactCrop__crop-mask > rect {
+  fill: rgba(0, 0, 0, 0.55);
+}
+
+.editor-react-crop .ReactCrop__crop-selection {
+  border: none;
+  box-shadow: none;
+  color: var(--color-foreground);
+}
+
+.editor-react-crop .ReactCrop__drag-handle {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: none;
+  opacity: 1;
+}
+
+.editor-react-crop .ReactCrop__drag-handle::after,
+.editor-react-crop .ReactCrop__drag-handle::before {
+  content: '';
+  position: absolute;
+  background: color-mix(in oklab, var(--color-foreground) 75%, transparent);
+  border-radius: 1px;
+}
+
+/* NW — ┌ */
+.editor-react-crop .ReactCrop__drag-handle.ord-nw::after {
+  width: 10px;
+  height: 1.5px;
+  top: 0;
+  left: 0;
+}
+
+.editor-react-crop .ReactCrop__drag-handle.ord-nw::before {
+  width: 1.5px;
+  height: 10px;
+  top: 0;
+  left: 0;
+}
+
+/* NE — ┐ */
+.editor-react-crop .ReactCrop__drag-handle.ord-ne::after {
+  width: 10px;
+  height: 1.5px;
+  top: 0;
+  right: 0;
+}
+
+.editor-react-crop .ReactCrop__drag-handle.ord-ne::before {
+  width: 1.5px;
+  height: 10px;
+  top: 0;
+  right: 0;
+}
+
+/* SW — └ */
+.editor-react-crop .ReactCrop__drag-handle.ord-sw::after {
+  width: 10px;
+  height: 1.5px;
+  bottom: 0;
+  left: 0;
+}
+
+.editor-react-crop .ReactCrop__drag-handle.ord-sw::before {
+  width: 1.5px;
+  height: 10px;
+  bottom: 0;
+  left: 0;
+}
+
+/* SE — ┘ */
+.editor-react-crop .ReactCrop__drag-handle.ord-se::after {
+  width: 10px;
+  height: 1.5px;
+  bottom: 0;
+  right: 0;
+}
+
+.editor-react-crop .ReactCrop__drag-handle.ord-se::before {
+  width: 1.5px;
+  height: 10px;
+  bottom: 0;
+  right: 0;
+}
+
+.editor-react-crop .ReactCrop__drag-bar {
+  display: none;
+}
+
+/* Override react-image-crop defaults that use thick white borders */
+.editor-react-crop .ReactCrop__crop-selection:focus {
+  outline: none;
+}
