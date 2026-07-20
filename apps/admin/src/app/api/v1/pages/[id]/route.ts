@@ -4,7 +4,6 @@ import {
   getClientIp,
   getPage,
   handleApiError,
-  publishPage,
   updatePage,
 } from '@zodyk/api';
 

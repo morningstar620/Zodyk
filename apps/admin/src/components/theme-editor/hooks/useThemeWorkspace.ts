@@ -153,7 +153,8 @@ export function useThemeWorkspace(themeId: string) {
 
   const removeFileFromWorkspace = useCallback((path: string) => {
     setLoadedFiles((prev) => {
-      const { [path]: _removed, ...rest } = prev;
+      const rest = { ...prev };
+      delete rest[path];
       return rest;
     });
   }, []);

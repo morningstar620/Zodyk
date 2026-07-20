@@ -81,6 +81,7 @@ export class ThemeLspClient {
   }
 
   getErrorsForUri(uri: string): LspDiagnosticEntry[] {
+    void uri;
     return [];
   }
 

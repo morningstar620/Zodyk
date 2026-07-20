@@ -23,7 +23,6 @@ export default function SystemRecordsPage() {
   const [records, setRecords] = useState<SystemRecordRow[]>([]);
   const [fields, setFields] = useState<MetaFieldDefinition[]>([]);
   const [displayColumns, setDisplayColumns] = useState<string[]>([]);
-  const [defaultView, setDefaultView] = useState<'table' | 'list' | 'card'>('table');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -44,7 +43,6 @@ export default function SystemRecordsPage() {
         setSingularLabel(entity.singularLabel);
         setFields(entity.fields ?? []);
         setDisplayColumns(entity.display?.tableColumns ?? []);
-        setDefaultView(entity.defaultView);
         setView(entity.defaultView);
         const userFields = (entity.fields ?? []).filter((f) => !f.isSystem && !f.hidden);
         setVisibleColumns(

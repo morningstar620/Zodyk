@@ -1,14 +1,4 @@
-import {
-  activateThemeHandler,
-  getActiveThemeHandler,
-  getApiSession,
-  getThemeHealthHandler,
-  handleApiError,
-  listThemeTemplates,
-  listThemesHandler,
-  scaffoldTemplateHandler,
-  updateThemeSettings,
-} from '@zodyk/api';
+import { getApiSession, handleApiError, listThemesHandler } from '@zodyk/api';
 
 export async function GET(request: Request) {
   try {

@@ -16,7 +16,7 @@ import {
 } from '@zodyk/shared-ui';
 import { LayoutGrid, List, Plus, Table2 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { SystemRecordRow } from './system-entity-types';
 
 export function recordLabel(data: Record<string, unknown>): string {

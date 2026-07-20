@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useMemo } from 'react';
 import type { DiagnosticEntry } from './hooks/useMonacoLsp';
 import { modelUriToPath } from './languages/registerZodykLiquid';
 
