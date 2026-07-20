@@ -12,6 +12,7 @@ import { requireStorageConfig } from '@zodyk/media/config';
 import { checksum } from '../install';
 import { buildThemeZip, extractThemeZip } from '../zip';
 import { guessContentType } from './content-type';
+import { readLocalThemeFile } from './local-fallback';
 import type {
   InstallResult,
   ThemeFileInput,
@@ -48,6 +49,11 @@ function prefixFor(theme: ThemeRef): string {
   return theme.storagePrefix ?? buildThemeStoragePrefix(theme.tenantId, theme.id);
 }
 
+function resolveR2Key(theme: ThemeRef, path: string, storageKey: string): string {
+  if (storageKey.includes('/themes/')) return storageKey;
+  return buildThemeObjectKey(theme.tenantId, theme.id, path);
+}
+
 export class R2Storage implements ThemeStorage {
   readonly kind = 'r2' as const;
 
@@ -58,7 +64,7 @@ export class R2Storage implements ThemeStorage {
   async loadTheme(theme: ThemeRef, files: ThemeFileMeta[] = []): Promise<Record<string, string>> {
     await this.ensureConfigured();
     const entries = await mapConcurrent(files, 10, async (f) => {
-      const content = await this.readContent(f.storageKey, f.content);
+      const content = await this.readContent(theme, f.path, f.storageKey, f.content);
       return [f.path, content] as const;
     });
     return Object.fromEntries(entries);
@@ -67,8 +73,17 @@ export class R2Storage implements ThemeStorage {
   async readFile(theme: ThemeRef, path: string, meta?: ThemeFileMeta): Promise<string> {
     await this.ensureConfigured();
     if (meta?.content) return meta.content;
-    const key = meta?.storageKey ?? buildThemeObjectKey(theme.tenantId, theme.id, path);
-    return getObjectAsString(key);
+    const key = resolveR2Key(theme, path, meta?.storageKey ?? path);
+    try {
+      return await getObjectAsString(key);
+    } catch (error) {
+      const local = await readLocalThemeFile(theme, path);
+      if (local !== null) {
+        console.warn(`[theme-engine] R2 miss for ${path}, using local fallback`);
+        return local;
+      }
+      throw error;
+    }
   }
 
   async writeFile(theme: ThemeRef, path: string, content: string): Promise<WriteResult> {
@@ -135,10 +150,26 @@ export class R2Storage implements ThemeStorage {
     return () => undefined;
   }
 
-  private async readContent(storageKey: string, legacyContent?: string): Promise<string> {
+  private async readContent(
+    theme: ThemeRef,
+    path: string,
+    storageKey: string,
+    legacyContent?: string,
+  ): Promise<string> {
     if (legacyContent !== undefined && legacyContent !== '') {
       return legacyContent;
     }
-    return getObjectAsString(storageKey);
+
+    const key = resolveR2Key(theme, path, storageKey);
+    try {
+      return await getObjectAsString(key);
+    } catch (error) {
+      const local = await readLocalThemeFile(theme, path);
+      if (local !== null) {
+        console.warn(`[theme-engine] R2 miss for ${path}, using local fallback`);
+        return local;
+      }
+      throw error;
+    }
   }
 }

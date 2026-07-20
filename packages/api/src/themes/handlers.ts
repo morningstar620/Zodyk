@@ -37,6 +37,8 @@ import {
   updateThemeSettingsForTheme,
   upsertThemeFile,
   getThemeStorageStatus,
+  getThemeR2SyncStatus,
+  syncThemeToR2FromLocal,
   type RenderContextInput,
 } from '@zodyk/theme-engine';
 import {
@@ -278,6 +280,26 @@ export async function listThemesHandler(session: AuthSession | null) {
 export async function getThemeStorageStatusHandler(session: AuthSession | null) {
   requirePermission(session, 'themes:read');
   return getThemeStorageStatus();
+}
+
+export async function getThemeR2SyncStatusHandler(
+  session: AuthSession | null,
+  themeId: string,
+) {
+  requirePermission(session, 'themes:read');
+  const status = await getThemeR2SyncStatus(themeId, DEFAULT_TENANT_ID);
+  if (!status) throw new AuthError('Theme not found', 404);
+  return status;
+}
+
+export async function syncThemeToR2Handler(session: AuthSession | null, themeId: string) {
+  requirePermission(session, 'themes:install');
+  try {
+    return await syncThemeToR2FromLocal(themeId, DEFAULT_TENANT_ID);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to sync theme to R2';
+    throw new AuthError(message, 400);
+  }
 }
 
 export async function getThemeHandler(session: AuthSession | null, themeId: string) {

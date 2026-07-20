@@ -42,9 +42,23 @@ interface ThemeStorageStatus {
   label: string;
 }
 
+interface ThemeR2SyncStatus {
+  themeId: string;
+  slug: string;
+  name: string;
+  storageKind: 'local' | 'r2';
+  expectedFiles: number;
+  presentInR2: number;
+  missingInR2: string[];
+  availableLocally: string[];
+  needsSync: boolean;
+  localSourcePath?: string;
+}
+
 export default function ThemesPage() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [syncingR2, setSyncingR2] = useState(false);
   const { data: themes = [], isLoading: themesLoading } = useApi<ThemeRow[]>('/api/v1/themes');
   const { data: health } = useApi<HealthResponse>('/api/v1/themes/health');
   const { data: themeStorage } = useApi<ThemeStorageStatus>('/api/v1/themes/storage');
@@ -55,10 +69,34 @@ export default function ThemesPage() {
   const isLocalThemeStorage = themeStorage?.kind === 'local';
   const storageReady =
     isLocalThemeStorage || Boolean(storageHealth?.configured && storageHealth?.connection);
+  const liveThemeId = themes.find((t) => t.status === 'live' || t.isActive)?.id;
+  const { data: r2Sync } = useApi<ThemeR2SyncStatus>(
+    liveThemeId && !isLocalThemeStorage ? `/api/v1/themes/${liveThemeId}/r2-sync` : null,
+  );
 
   async function refreshThemes() {
     await mutateApi('/api/v1/themes');
     await mutateApi('/api/v1/themes/health');
+    if (liveThemeId && !isLocalThemeStorage) {
+      await mutateApi(`/api/v1/themes/${liveThemeId}/r2-sync`);
+    }
+  }
+
+  async function syncLiveThemeToR2() {
+    if (!liveThemeId) return;
+    setSyncingR2(true);
+    try {
+      const res = await fetch(`/api/v1/themes/${liveThemeId}/r2-sync`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Failed to upload theme to R2');
+      }
+      await refreshThemes();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload theme to R2');
+    } finally {
+      setSyncingR2(false);
+    }
   }
 
   async function publish(themeId: string) {
@@ -184,6 +222,32 @@ export default function ThemesPage() {
           </Link>
           , or set <code className="rounded bg-amber-100 px-1">THEME_STORAGE=local</code> for
           local development.
+        </div>
+      )}
+
+      {r2Sync?.needsSync && storageReady && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">
+            Live theme files are missing from R2 ({r2Sync.missingInR2.length} of{' '}
+            {r2Sync.expectedFiles} files).
+          </p>
+          <p className="mt-1 text-amber-800">
+            The storefront can read bundled theme files from the repo as a fallback, but production
+            edits require files in R2. Upload from{' '}
+            <code className="rounded bg-amber-100 px-1">{r2Sync.localSourcePath}</code>
+            {r2Sync.availableLocally.length === 0
+              ? ' — no local files found at that path on this server.'
+              : ` (${r2Sync.availableLocally.length} files available locally).`}
+          </p>
+          <div className="mt-3">
+            <Button
+              size="sm"
+              disabled={syncingR2 || r2Sync.availableLocally.length === 0}
+              onClick={() => void syncLiveThemeToR2()}
+            >
+              {syncingR2 ? 'Uploading to R2…' : 'Upload theme to R2'}
+            </Button>
+          </div>
         </div>
       )}
 

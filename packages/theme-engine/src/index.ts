@@ -55,9 +55,12 @@ export {
   renderThemeSection,
   assertOneLiveTheme,
   getThemeStorageStatus,
+  getThemeR2SyncStatus,
+  syncThemeToR2FromLocal,
   type LoadedTheme,
   type ThemeListItem,
   type ThemeHealthIssue,
+  type ThemeR2SyncStatus,
   type ThemeLoadPhaseRecorder,
 } from './theme-store';
 

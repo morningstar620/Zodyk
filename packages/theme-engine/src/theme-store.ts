@@ -17,6 +17,7 @@ import {
   getThemeStorageKind,
 } from './storage/create-theme-storage';
 import { resolveThemeLocalRoot, themeRoot } from './storage/theme-path';
+import { listLocalThemeFiles } from './storage/local-fallback';
 import type { ThemeFileMeta, ThemeRef } from './storage/types';
 import { themeStoragePrefix } from './r2-storage';
 import {
@@ -36,7 +37,7 @@ import {
   validateThemePath,
   type ThemeZipFile,
 } from './zip';
-import { buildThemeObjectKey } from '@zodyk/media/objects';
+import { buildThemeObjectKey, buildThemeStoragePrefix, listObjects } from '@zodyk/media/objects';
 
 export interface LoadedTheme {
   id: string;
@@ -1117,6 +1118,102 @@ export function getThemeStorageStatus(): { kind: 'local' | 'r2'; label: string }
     kind,
     label: kind === 'local' ? 'Local files' : 'Cloud (R2)',
   };
+}
+
+export interface ThemeR2SyncStatus {
+  themeId: string;
+  slug: string;
+  name: string;
+  storageKind: 'local' | 'r2';
+  expectedFiles: number;
+  presentInR2: number;
+  missingInR2: string[];
+  availableLocally: string[];
+  needsSync: boolean;
+  localSourcePath?: string;
+}
+
+export async function getThemeR2SyncStatus(
+  themeId: string,
+  tenantId = DEFAULT_TENANT_ID,
+): Promise<ThemeR2SyncStatus | null> {
+  const { Theme } = await ensureDb();
+  const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
+  if (!theme) return null;
+
+  const storageKind = getThemeStorageKind();
+  const ref = toThemeRef(theme);
+  const localSourcePath = themeRoot(ref);
+  const availableLocally = await listLocalThemeFiles(ref);
+
+  if (storageKind === 'local') {
+    return {
+      themeId: theme._id.toString(),
+      slug: theme.slug,
+      name: theme.name,
+      storageKind,
+      expectedFiles: availableLocally.length,
+      presentInR2: 0,
+      missingInR2: [],
+      availableLocally,
+      needsSync: false,
+      localSourcePath,
+    };
+  }
+
+  const metas = await loadFileMetas(theme._id);
+  const prefix = theme.storagePrefix ?? buildThemeStoragePrefix(tenantId, theme._id.toString());
+  const r2Keys = new Set(await listObjects(prefix));
+  const missingInR2: string[] = [];
+
+  for (const meta of metas) {
+    const key = resolveR2KeyForMeta(ref, meta.path, meta.storageKey);
+    if (!r2Keys.has(key)) {
+      missingInR2.push(meta.path);
+    }
+  }
+
+  return {
+    themeId: theme._id.toString(),
+    slug: theme.slug,
+    name: theme.name,
+    storageKind,
+    expectedFiles: metas.length,
+    presentInR2: metas.length - missingInR2.length,
+    missingInR2,
+    availableLocally,
+    needsSync: missingInR2.length > 0,
+    localSourcePath,
+  };
+}
+
+function resolveR2KeyForMeta(ref: ThemeRef, path: string, storageKey: string): string {
+  if (storageKey.includes('/themes/')) return storageKey;
+  return buildThemeObjectKey(ref.tenantId, ref.id, path);
+}
+
+export async function syncThemeToR2FromLocal(
+  themeId: string,
+  tenantId = DEFAULT_TENANT_ID,
+): Promise<{ uploaded: number; themeId: string }> {
+  if (getThemeStorageKind() !== 'r2') {
+    throw new Error('Theme storage is not R2');
+  }
+
+  const { Theme } = await ensureDb();
+  const theme = await Theme.findOne({ _id: themeId, tenantId });
+  if (!theme) throw new Error('Theme not found');
+
+  const ref = toThemeRef(theme);
+  const localRoot = themeRoot(ref);
+  const files = await readThemeDirectory(localRoot);
+  if (files.length === 0) {
+    throw new Error(`No local theme files found at ${localRoot}`);
+  }
+
+  await installThemeFiles(theme, files);
+  invalidateThemeCache(themeId, tenantId);
+  return { uploaded: files.length, themeId };
 }
 
 export type { ThemeHealthIssue };
