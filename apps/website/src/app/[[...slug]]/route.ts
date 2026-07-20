@@ -30,18 +30,31 @@ export async function GET(
     designMode || (previewThemeId && previewToken) || hasPreviewCookie,
   );
 
-  const { html, status, timings } = await renderSitePage(pathname, {
-    previewThemeId,
-    previewToken,
-    designMode,
-  });
+  try {
+    const { html, status, timings } = await renderSitePage(pathname, {
+      previewThemeId,
+      previewToken,
+      designMode,
+    });
 
-  return new NextResponse(html, {
-    status,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': cacheControlForRequest(isPreview),
-      'Server-Timing': formatServerTiming(timings),
-    },
-  });
+    return new NextResponse(html, {
+      status,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': cacheControlForRequest(isPreview),
+        'Server-Timing': formatServerTiming(timings),
+      },
+    });
+  } catch (error) {
+    console.error('[website] render failed:', error);
+    const message =
+      error instanceof Error ? error.message : 'Unknown error while rendering page';
+    return new NextResponse(
+      `<h1>Site temporarily unavailable</h1><p>${message}</p>`,
+      {
+        status: 500,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      },
+    );
+  }
 }
