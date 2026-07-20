@@ -1,20 +1,9 @@
-import {
-  getApiSession,
-  handleApiError,
-  previewThemeHandler,
-} from '@zodyk/api';
+import { previewThemeHandler } from '@zodyk/api';
+import { apiRoute } from '@/lib/api-route';
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const session = await getApiSession(request);
-    const { id } = await params;
-    const body = await request.json();
-    const { result, serverTiming } = await previewThemeHandler(session, id, body);
-    return Response.json(result, { headers: serverTiming });
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
+export const POST = apiRoute(async (request, { params }, session) => {
+  const { id } = await params;
+  if (!id) return Response.json({ error: 'Theme id required' }, { status: 400 });
+  const body = await request.json();
+  return previewThemeHandler(session, id, body);
+});

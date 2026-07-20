@@ -1,11 +1,14 @@
 {
   "name": "Home",
   "sections": {
-    "header_1": { "type": "header", "settings": {} },
+    "header_1": {
+      "type": "header",
+      "settings": {}
+    },
     "hero_1": {
       "type": "hero",
       "settings": {
-        "title": "Welcome to Zodyk",
+        "title": "Welcome to ",
         "description": "A modern website operating system with Shopify-style themes.",
         "button_text": "Learn more",
         "button_url": "/about"
@@ -14,7 +17,7 @@
     "features_1": {
       "type": "features",
       "settings": {
-        "heading": "Built for scale"
+        "heading": "Built for scale for"
       }
     },
     "testimonial_1": {
@@ -24,7 +27,16 @@
         "author": "Theme Developer"
       }
     },
-    "footer_1": { "type": "footer", "settings": {} }
+    "footer_1": {
+      "type": "footer",
+      "settings": {}
+    }
   },
-  "order": ["header_1", "hero_1", "features_1", "testimonial_1", "footer_1"]
+  "order": [
+    "header_1",
+    "hero_1",
+    "features_1",
+    "testimonial_1",
+    "footer_1"
+  ]
 }

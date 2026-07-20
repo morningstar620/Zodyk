@@ -27,6 +27,8 @@
       "@zodyk/payments": ["./packages/payments/src/index.ts"],
       "@zodyk/builder": ["./packages/builder/src/index.ts"],
       "@zodyk/theme-engine": ["./packages/theme-engine/src/index.ts"],
+      "@zodyk/theme-language": ["./packages/theme-language/src/index.ts"],
+      "@zodyk/theme-lsp": ["./packages/theme-lsp/src/index.ts"],
       "@zodyk/api": ["./packages/api/src/index.ts"],
       "@zodyk/shared-ui": ["./packages/shared-ui/src/index.ts"]
     }

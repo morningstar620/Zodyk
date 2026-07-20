@@ -2,6 +2,7 @@ import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import { getModels } from '@zodyk/database';
 import {
   getTemplateCustomization,
+  getThemeAssetFile,
   loadThemeByPreview,
   metaObjectToLiquid,
   menusToLinklists,
@@ -11,6 +12,11 @@ import {
   type LoadedTheme,
 } from '@zodyk/theme-engine';
 import { cookies } from 'next/headers';
+import {
+  createRequestTimings,
+  logSlowRender,
+  type RequestTimings,
+} from './request-timing';
 import { getCachedPageHtml, getSiteData, setCachedPageHtml, invalidateSiteCache } from './site-cache';
 
 export { invalidateSiteCache };
@@ -19,6 +25,13 @@ export interface RenderSiteOptions {
   previewThemeId?: string;
   previewToken?: string;
   designMode?: boolean;
+}
+
+export interface RenderSiteResult {
+  html: string;
+  status: number;
+  timings: Record<string, number>;
+  cacheHit: boolean;
 }
 
 function getShopUrl(): string {
@@ -61,16 +74,23 @@ function injectScripts(html: string, options: RenderSiteOptions): string {
   return result;
 }
 
-async function resolveTheme(options: RenderSiteOptions): Promise<LoadedTheme | null> {
+async function resolveTheme(
+  options: RenderSiteOptions,
+  timings?: RequestTimings,
+): Promise<LoadedTheme | null> {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
 
+  const themeStart = performance.now();
+
   if (options.previewThemeId && options.previewToken) {
-    return loadThemeByPreview(
+    const theme = await loadThemeByPreview(
       options.previewThemeId,
       options.previewToken,
       DEFAULT_TENANT_ID,
     );
+    timings?.mark('theme-load', themeStart);
+    return theme;
   }
 
   const cookieStore = await cookies();
@@ -78,47 +98,75 @@ async function resolveTheme(options: RenderSiteOptions): Promise<LoadedTheme | n
   const cookieToken = cookieStore.get('zodyk_preview_token')?.value;
   if (cookieTheme && cookieToken) {
     const preview = await loadThemeByPreview(cookieTheme, cookieToken, DEFAULT_TENANT_ID);
-    if (preview) return preview;
+    if (preview) {
+      timings?.mark('theme-load', themeStart);
+      return preview;
+    }
   }
 
   const site = await getSiteData(uri);
+  timings?.mark('theme-load', themeStart);
   return site?.theme ?? null;
 }
 
 export async function renderSitePage(
   pathname: string,
   options: RenderSiteOptions = {},
-): Promise<{ html: string; status: number }> {
+): Promise<RenderSiteResult> {
+  const totalStart = performance.now();
+  const timings = createRequestTimings();
   const cacheKey = options.previewThemeId
     ? `preview:${options.previewThemeId}:${pathname}`
     : pathname;
 
   if (!options.designMode) {
+    const cacheStart = performance.now();
     const cached = getCachedPageHtml(cacheKey);
-    if (cached) return { html: cached.html, status: cached.status };
+    timings.mark('cache-lookup', cacheStart);
+    if (cached) {
+      const result = timings.finish(totalStart);
+      result['cache-hit'] = 1;
+      logSlowRender(pathname, result, { cacheHit: true });
+      return { html: cached.html, status: cached.status, timings: result, cacheHit: true };
+    }
   }
 
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    return { html: '<h1>Database not configured</h1>', status: 500 };
+    return {
+      html: '<h1>Database not configured</h1>',
+      status: 500,
+      timings: timings.finish(totalStart),
+      cacheHit: false,
+    };
   }
 
-  const theme = await resolveTheme(options);
+  const theme = await resolveTheme(options, timings);
   if (!theme) {
     return {
       html: '<h1>No active theme</h1><p>Install and activate a theme from the admin panel.</p>',
       status: 503,
+      timings: timings.finish(totalStart),
+      cacheHit: false,
     };
   }
 
+  const siteStart = performance.now();
   const site = await getSiteData(uri);
+  timings.mark('site-data', siteStart);
   if (!site) {
-    return { html: '<h1>Site data unavailable</h1>', status: 503 };
+    return {
+      html: '<h1>Site data unavailable</h1>',
+      status: 503,
+      timings: timings.finish(totalStart),
+      cacheHit: false,
+    };
   }
 
   const { pages, metaDefinitions, menus } = site;
   const { MetaObjectEntry } = getModels();
 
+  const routeStart = performance.now();
   const route = await resolveRoute(pathname, {
     pages,
     metaDefinitions,
@@ -153,6 +201,7 @@ export async function renderSitePage(
         deletedAt: { $exists: false },
       }).lean(),
   });
+  timings.mark('route', routeStart);
 
   const shopUrl = getShopUrl();
   const routeMenus = menus.map((menu) => ({
@@ -241,6 +290,7 @@ export async function renderSitePage(
       : undefined,
   };
 
+  const liquidStart = performance.now();
   const { html: rendered } = await renderThemedPage(theme.files, {
     view: route.view,
     pageTemplateSuffix,
@@ -248,7 +298,10 @@ export async function renderSitePage(
     metaEntryTemplateSuffix,
     sectionOverrides,
     context: contextInput as Parameters<typeof renderThemedPage>[1]['context'],
+    themeId: theme.id,
+    themeUpdatedAt: theme.updatedAt,
   });
+  timings.mark('liquid-render', liquidStart);
 
   const status = route.view === 'not_found' ? 404 : 200;
   const html = injectScripts(rendered, options);
@@ -256,7 +309,10 @@ export async function renderSitePage(
     setCachedPageHtml(cacheKey, html, status);
   }
 
-  return { html, status };
+  const result = timings.finish(totalStart);
+  result['cache-hit'] = 0;
+  logSlowRender(pathname, result, { cacheHit: false });
+  return { html, status, timings: result, cacheHit: false };
 }
 
 export async function getThemeAsset(
@@ -266,19 +322,18 @@ export async function getThemeAsset(
   content: string;
   contentType: string;
 } | null> {
-  const theme = await resolveTheme({
-    previewThemeId: options.previewThemeId,
-    previewToken: options.previewToken,
-  });
-  if (!theme) return null;
+  let previewThemeId = options.previewThemeId;
+  let previewToken = options.previewToken;
 
-  const path = `assets/${assetPath}`;
-  const content = theme.files[path];
-  if (!content) return null;
-  const contentType = path.endsWith('.css')
-    ? 'text/css'
-    : path.endsWith('.js')
-      ? 'application/javascript'
-      : 'text/plain';
-  return { content, contentType };
+  if (!previewThemeId || !previewToken) {
+    const cookieStore = await cookies();
+    previewThemeId = previewThemeId ?? cookieStore.get('zodyk_preview_theme')?.value;
+    previewToken = previewToken ?? cookieStore.get('zodyk_preview_token')?.value;
+  }
+
+  return getThemeAssetFile(assetPath, {
+    previewThemeId,
+    previewToken,
+    tenantId: DEFAULT_TENANT_ID,
+  });
 }

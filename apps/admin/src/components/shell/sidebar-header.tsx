@@ -1,24 +1,17 @@
 'use client';
 
-import { Button } from '@zodyk/shared-ui';
+import { Button, Logo } from '@zodyk/shared-ui';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 
-type SidebarHeaderProps = {
-  workspaceName?: string;
-};
-
-export function SidebarHeader({ workspaceName = 'acme.studio' }: SidebarHeaderProps) {
+export function SidebarHeader() {
   return (
     <div className="space-y-4">
       <Link href="/" className="flex items-center gap-2.5 px-1">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-          Z
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-sidebar-foreground">Zodyk</p>
-          <p className="truncate text-xs text-muted-foreground">{workspaceName}</p>
-        </div>
+        <Logo width={32} height={32} className="h-6 w-6 shrink-0" />
+        <p className="truncate text-lg font-semibold tracking-wide text-sidebar-foreground [font-family:var(--font-geist-sans)]">
+          ZOD<span className="text-[#0b65f8]">Y</span>K
+        </p>
       </Link>
 
       <Button className="w-full justify-between" size="sm">

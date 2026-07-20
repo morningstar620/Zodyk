@@ -15,6 +15,7 @@ interface ThemeRow {
   isActive: boolean;
   lastSavedAt?: string;
   updatedAt: string;
+  storageKind?: 'local' | 'r2';
 }
 
 interface HealthIssue {
@@ -36,16 +37,24 @@ interface StorageHealth {
   publicUrl?: boolean;
 }
 
+interface ThemeStorageStatus {
+  kind: 'local' | 'r2';
+  label: string;
+}
+
 export default function ThemesPage() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const { data: themes = [], isLoading: themesLoading } = useApi<ThemeRow[]>('/api/v1/themes');
   const { data: health } = useApi<HealthResponse>('/api/v1/themes/health');
+  const { data: themeStorage } = useApi<ThemeStorageStatus>('/api/v1/themes/storage');
   const { data: storageHealth } = useApi<StorageHealth>('/api/v1/storage/health');
 
   const issues = health?.issues ?? [];
   const activeThemeId = health?.themeId ?? null;
-  const storageReady = storageHealth?.configured && storageHealth?.connection;
+  const isLocalThemeStorage = themeStorage?.kind === 'local';
+  const storageReady =
+    isLocalThemeStorage || Boolean(storageHealth?.configured && storageHealth?.connection);
 
   async function refreshThemes() {
     await mutateApi('/api/v1/themes');
@@ -135,7 +144,15 @@ export default function ThemesPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Themes</h1>
-          <p className="text-zinc-600">Customize your storefront appearance</p>
+          <p className="text-zinc-600">
+            Customize your storefront appearance
+            {themeStorage ? (
+              <>
+                {' '}
+                · <span className="text-zinc-500">{themeStorage.label}</span>
+              </>
+            ) : null}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <input
@@ -159,13 +176,14 @@ export default function ThemesPage() {
         </div>
       </div>
 
-      {!storageReady && storageHealth !== undefined && (
+      {!storageReady && !isLocalThemeStorage && storageHealth !== undefined && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Object storage (R2) is required for themes. Configure R2 in{' '}
+          Object storage (R2) is required for cloud theme storage. Configure R2 in{' '}
           <Link href="/settings/integrations" className="font-medium underline">
             Settings → Integrations
           </Link>
-          .
+          , or set <code className="rounded bg-amber-100 px-1">THEME_STORAGE=local</code> for
+          local development.
         </div>
       )}
 

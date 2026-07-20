@@ -12,6 +12,7 @@ import {
   CardTitle,
   Input,
   Label,
+  Logo,
 } from '@zodyk/shared-ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -56,6 +57,7 @@ export default function RegisterPage() {
     <main className="flex min-h-screen items-center justify-center p-8">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <Logo width={40} height={40} className="mb-2 h-10 w-10" />
           <CardTitle>Create account</CardTitle>
           <CardDescription>Register for a Zodyk admin account</CardDescription>
         </CardHeader>

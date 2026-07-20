@@ -43,6 +43,8 @@ export function getClientIp(request: Request): string | undefined {
   );
 }
 
+export * from './request-log';
+
 export * from './users/handlers';
 export * from './roles/handlers';
 export * from './api-tokens/handlers';

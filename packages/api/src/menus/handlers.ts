@@ -8,6 +8,7 @@ import {
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
+import { invalidateCatalogCache } from '../themes/catalog-cache';
 
 export interface LinkTargetOption {
   id: string;
@@ -188,6 +189,7 @@ export async function createMenu(session: AuthSession | null, body: unknown, ip?
   });
 
   await invalidateWebsiteCache();
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return serializeMenu(item);
 }
 
@@ -233,6 +235,7 @@ export async function updateMenu(
   });
 
   await invalidateWebsiteCache();
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return serializeMenu(item);
 }
 
@@ -256,6 +259,7 @@ export async function deleteMenu(session: AuthSession | null, id: string, ip?: s
   });
 
   await invalidateWebsiteCache();
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return { success: true };
 }
 

@@ -1,12 +1,8 @@
-import { getApiSession, handleApiError, uploadThemeHandler } from '@zodyk/api';
+import { uploadThemeHandler } from '@zodyk/api';
+import { apiRoute } from '@/lib/api-route';
 
-export async function POST(request: Request) {
-  try {
-    const session = await getApiSession(request);
-    const formData = await request.formData();
-    const result = await uploadThemeHandler(session, formData);
-    return Response.json(result, { status: 201 });
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
+export const POST = apiRoute(async (request, _context, session) => {
+  const formData = await request.formData();
+  const result = await uploadThemeHandler(session, formData);
+  return { result, status: 201 };
+});

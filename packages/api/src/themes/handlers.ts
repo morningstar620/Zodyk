@@ -36,8 +36,18 @@ import {
   saveTemplateJson,
   updateThemeSettingsForTheme,
   upsertThemeFile,
+  getThemeStorageStatus,
   type RenderContextInput,
 } from '@zodyk/theme-engine';
+import {
+  buildThemeLanguageWorkspace,
+  buildThemeLanguageWorkspaceMetadata,
+  buildThemeLanguageHealth,
+  buildWorkspaceTimingsHeader,
+  getThemeLanguageWorkspaceFiles,
+  invalidateWorkspaceMetadataCache,
+  warmWorkspaceMetadataCache,
+} from './language-workspace';
 
 const themeIdSchema = z.object({ themeId: z.string().min(1) });
 
@@ -118,13 +128,7 @@ const previewContextCache = new Map<
   }
 >();
 
-function formatServerTiming(timings: Record<string, number>): HeadersInit {
-  return {
-    'Server-Timing': Object.entries(timings)
-      .map(([name, dur]) => `${name};dur=${Math.round(dur)}`)
-      .join(', '),
-  };
-}
+import { formatServerTiming } from '../request-log';
 
 function getShopUrl(): string {
   return process.env.WEBSITE_URL ?? process.env.ADMIN_URL ?? 'http://localhost:3001';
@@ -269,6 +273,11 @@ async function buildPreviewContext(
 export async function listThemesHandler(session: AuthSession | null) {
   requirePermission(session, 'themes:read');
   return listThemes(DEFAULT_TENANT_ID);
+}
+
+export async function getThemeStorageStatusHandler(session: AuthSession | null) {
+  requirePermission(session, 'themes:read');
+  return getThemeStorageStatus();
 }
 
 export async function getThemeHandler(session: AuthSession | null, themeId: string) {
@@ -416,6 +425,8 @@ export async function putThemeFileHandler(
   const input = fileWriteSchema.parse(body);
   const result = await upsertThemeFile(themeId, input.path, input.content, DEFAULT_TENANT_ID);
   await maybeInvalidateLiveTheme(result.isLive);
+  invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   return { success: true };
 }
 
@@ -430,6 +441,8 @@ export async function createThemeFileHandler(
   if (existing) throw new AuthError('File already exists', 409);
   const result = await upsertThemeFile(themeId, input.path, input.content, DEFAULT_TENANT_ID);
   await maybeInvalidateLiveTheme(result.isLive);
+  invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   return { success: true };
 }
 
@@ -441,6 +454,8 @@ export async function deleteThemeFileHandler(
   requirePermission(session, 'themes:update');
   const result = await deleteThemeFile(themeId, path, DEFAULT_TENANT_ID);
   await maybeInvalidateLiveTheme(result.isLive);
+  invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   return { success: true };
 }
 
@@ -480,6 +495,60 @@ export async function uploadThemeHandler(session: AuthSession | null, formData: 
 export async function exportThemeHandler(session: AuthSession | null, themeId: string) {
   requirePermission(session, 'themes:read');
   return exportThemeAsZip(themeId, DEFAULT_TENANT_ID);
+}
+
+export async function getThemeLanguageWorkspaceHandler(
+  session: AuthSession | null,
+  themeId: string,
+) {
+  requirePermission(session, 'themes:read');
+  const { snapshot, timings } = await buildThemeLanguageWorkspace(themeId, DEFAULT_TENANT_ID);
+  return {
+    result: snapshot,
+    serverTiming: buildWorkspaceTimingsHeader(timings),
+    phases: timings,
+  };
+}
+
+export async function getThemeLanguageWorkspaceMetadataHandler(
+  session: AuthSession | null,
+  themeId: string,
+  options?: { includeHealth?: boolean },
+) {
+  requirePermission(session, 'themes:read');
+  const { metadata, timings } = await buildThemeLanguageWorkspaceMetadata(
+    themeId,
+    DEFAULT_TENANT_ID,
+    options,
+  );
+  return {
+    result: metadata,
+    serverTiming: buildWorkspaceTimingsHeader(timings),
+    phases: timings,
+  };
+}
+
+export async function getThemeLanguageHealthHandler(
+  session: AuthSession | null,
+  themeId: string,
+) {
+  requirePermission(session, 'themes:read');
+  const { healthIssues, timings } = await buildThemeLanguageHealth(themeId, DEFAULT_TENANT_ID);
+  return {
+    result: { healthIssues },
+    serverTiming: buildWorkspaceTimingsHeader(timings),
+    phases: timings,
+  };
+}
+
+export async function getThemeLanguageWorkspaceFilesHandler(
+  session: AuthSession | null,
+  themeId: string,
+  paths: string[],
+) {
+  requirePermission(session, 'themes:read');
+  const files = await getThemeLanguageWorkspaceFiles(themeId, paths, DEFAULT_TENANT_ID);
+  return { files };
 }
 
 export async function getThemeSchemasHandler(

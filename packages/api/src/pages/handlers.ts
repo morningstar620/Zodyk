@@ -8,6 +8,7 @@ import {
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
+import { invalidateCatalogCache } from '../themes/catalog-cache';
 
 function serializePage(item: {
   _id: { toString(): string };
@@ -126,6 +127,7 @@ export async function createPage(session: AuthSession | null, body: unknown, ip?
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return serializePage(item);
 }
 
@@ -174,6 +176,7 @@ export async function updatePage(
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return serializePage(item);
 }
 
@@ -196,6 +199,7 @@ export async function deletePage(session: AuthSession | null, id: string, ip?: s
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return { success: true };
 }
 

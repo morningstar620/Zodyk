@@ -31,26 +31,35 @@ async function main() {
 
     const files = await ThemeFile.find({ themeId: theme._id });
     for (const file of files) {
-      if (file.r2Key && !file.content) continue;
-
-      const content = file.content;
-      if (!content) {
-        console.warn(`Skipping ${file.path} — no content or r2Key`);
+      const existingKey = file.storageKey || file.r2Key;
+      if (existingKey && !file.content) {
+        if (!file.storageKey && file.r2Key) {
+          file.storageKey = file.r2Key;
+          await file.save();
+          console.log(`Renamed key field for ${file.path}`);
+        }
         continue;
       }
 
-      const r2Key = buildThemeObjectKey(tenantId, themeId, file.path);
-      await putObject(r2Key, content, file.contentType || 'text/plain');
-      file.r2Key = r2Key;
+      const content = file.content;
+      if (!content) {
+        console.warn(`Skipping ${file.path} — no content or storageKey`);
+        continue;
+      }
+
+      const storageKey = buildThemeObjectKey(tenantId, themeId, file.path);
+      await putObject(storageKey, content, file.contentType || 'text/plain');
+      file.storageKey = storageKey;
+      file.r2Key = undefined;
       file.size = Buffer.byteLength(content, 'utf8');
       file.checksum = createHash('sha256').update(content).digest('hex');
       file.content = undefined;
       await file.save();
-      console.log(`Migrated ${file.path} → ${r2Key}`);
+      console.log(`Migrated ${file.path} → ${storageKey}`);
     }
   }
 
-  console.log('Theme R2 migration complete');
+  console.log('Theme storageKey migration complete');
 }
 
 main().catch((err) => {

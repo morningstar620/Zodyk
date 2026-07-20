@@ -26,7 +26,8 @@
     "@zodyk/core": "workspace:*",
     "@zodyk/database": "workspace:*",
     "@zodyk/media": "workspace:*",
-    "@zodyk/theme-engine": "workspace:*"
+    "@zodyk/theme-engine": "workspace:*",
+    "@zodyk/theme-language": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

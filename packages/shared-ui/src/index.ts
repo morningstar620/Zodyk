@@ -21,6 +21,7 @@ export {
   TableHead,
   TableCell,
 } from './components/table';
+export { Logo } from './components/logo';
 export { Select } from './components/select';
 export { Checkbox } from './components/checkbox';
 export { Skeleton } from './components/skeleton';

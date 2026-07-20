@@ -1,5 +1,14 @@
 import { renderSitePage } from '@/lib/render';
+import { formatServerTiming } from '@/lib/request-timing';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+
+function cacheControlForRequest(isPreview: boolean): string {
+  if (isPreview) {
+    return 'no-store, must-revalidate';
+  }
+  return 'public, s-maxage=60, stale-while-revalidate=600';
+}
 
 export async function GET(
   request: Request,
@@ -12,7 +21,16 @@ export async function GET(
   const previewToken = url.searchParams.get('preview_token') ?? undefined;
   const designMode = url.searchParams.get('preview') === '1';
 
-  const { html, status } = await renderSitePage(pathname, {
+  const cookieStore = await cookies();
+  const hasPreviewCookie = Boolean(
+    cookieStore.get('zodyk_preview_theme')?.value &&
+      cookieStore.get('zodyk_preview_token')?.value,
+  );
+  const isPreview = Boolean(
+    designMode || (previewThemeId && previewToken) || hasPreviewCookie,
+  );
+
+  const { html, status, timings } = await renderSitePage(pathname, {
     previewThemeId,
     previewToken,
     designMode,
@@ -22,7 +40,8 @@ export async function GET(
     status,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-store, must-revalidate',
+      'Cache-Control': cacheControlForRequest(isPreview),
+      'Server-Timing': formatServerTiming(timings),
     },
   });
 }

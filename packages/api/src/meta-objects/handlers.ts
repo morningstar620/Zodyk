@@ -10,6 +10,7 @@ import {
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
+import { invalidateCatalogCache } from '../themes/catalog-cache';
 
 export async function listMetaObjects(session: AuthSession | null) {
   requirePermission(session, 'meta_objects:read');
@@ -119,6 +120,7 @@ export async function createMetaObject(
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return {
     id: item._id.toString(),
     name: item.name,
@@ -184,6 +186,7 @@ export async function updateMetaObject(
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return {
     id: item._id.toString(),
     name: item.name,
@@ -238,5 +241,6 @@ export async function deleteMetaObject(
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  invalidateCatalogCache(DEFAULT_TENANT_ID);
   return { success: true };
 }

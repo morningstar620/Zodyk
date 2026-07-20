@@ -6,32 +6,37 @@ import {
   type TemplateJson,
   type ThemeHealthIssue,
 } from '@zodyk/core';
-import { connectDatabase, getModels } from '@zodyk/database';
-import { requireStorageConfig } from '@zodyk/media';
+import { connectDatabase, getModels, resolveThemeFileStorageKey } from '@zodyk/database';
 import type { Types } from 'mongoose';
 import { randomBytes } from 'node:crypto';
-import { checksum, filesToMap, readThemeDirectory } from './install';
+import { relative, resolve } from 'node:path';
+import { checksum, readThemeDirectory } from './install';
+import { PROTECTED_THEME_PATHS, guessContentType } from './storage/content-type';
 import {
-  PROTECTED_THEME_PATHS,
-  deleteThemeObject,
-  deleteThemePrefix,
-  ensureThemeStoragePrefix,
-  guessContentType,
-  readThemeObjectContent,
-  themeStoragePrefix,
-  writeThemeObject,
-} from './r2-storage';
+  getThemeStorage,
+  getThemeStorageKind,
+} from './storage/create-theme-storage';
+import { resolveThemeLocalRoot, themeRoot } from './storage/theme-path';
+import type { ThemeFileMeta, ThemeRef } from './storage/types';
+import { themeStoragePrefix } from './r2-storage';
 import {
   listSectionTypes,
   loadThemeSettings,
   parseAllSectionSchemas,
   parseSectionSchemasForTypes,
   getSectionTypesFromTemplate,
+  invalidateLiquidEngineCache,
   renderThemedPage,
+  getOrCreateLiquidEngine,
 } from './renderer';
 import type { RenderContextInput } from './renderer';
-import { createLiquidEngine, renderSection } from '@zodyk/liquid';
-import { buildThemeZip, buildThemeZipFilename, extractThemeZip, type ThemeZipFile } from './zip';
+import { renderSection } from '@zodyk/liquid';
+import {
+  buildThemeZipFilename,
+  validateThemePath,
+  type ThemeZipFile,
+} from './zip';
+import { buildThemeObjectKey } from '@zodyk/media';
 
 export interface LoadedTheme {
   id: string;
@@ -42,6 +47,7 @@ export interface LoadedTheme {
   previewToken: string;
   files: Record<string, string>;
   settings: Record<string, unknown>;
+  updatedAt?: string;
 }
 
 export interface ThemeListItem {
@@ -57,10 +63,17 @@ export interface ThemeListItem {
   lastSavedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  storageKind?: 'local' | 'r2';
 }
 
-const THEME_CACHE_TTL_MS = 60_000;
+const THEME_CACHE_TTL_MS = 900_000;
 const themeCache = new Map<string, { theme: LoadedTheme; cachedAt: number }>();
+const themeWatchUnsub = new Map<string, () => void>();
+
+export interface ThemeLoadPhaseRecorder {
+  mark(phase: string, startMs: number): void;
+  setMeta?(key: string, value: number | string | boolean): void;
+}
 
 function themeCacheKey(themeId: string, tenantId: string, updatedAt: string): string {
   return `${tenantId}:${themeId}:${updatedAt}`;
@@ -71,14 +84,54 @@ export function invalidateThemeCache(themeId: string, tenantId = DEFAULT_TENANT_
   for (const key of themeCache.keys()) {
     if (key.startsWith(prefix)) themeCache.delete(key);
   }
+  invalidateLiquidEngineCache(themeId);
+}
+
+function getCachedLoadedTheme(themeId: string, tenantId: string): LoadedTheme | null {
+  const prefix = `${tenantId}:${themeId}:`;
+  const now = Date.now();
+  for (const [key, entry] of themeCache) {
+    if (key.startsWith(prefix) && now - entry.cachedAt < THEME_CACHE_TTL_MS) {
+      return entry.theme;
+    }
+  }
+  return null;
 }
 
 async function ensureDb() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
   await connectDatabase(uri);
-  await requireStorageConfig();
+  // Storage config is required only for R2 backend (factory / R2Storage).
+  getThemeStorage();
   return getModels();
+}
+
+function toThemeRef(theme: {
+  _id: Types.ObjectId | string;
+  tenantId: string;
+  slug: string;
+  localRoot?: string;
+  storagePrefix?: string;
+}): ThemeRef {
+  return {
+    id: theme._id.toString(),
+    tenantId: theme.tenantId,
+    slug: theme.slug,
+    localRoot: theme.localRoot,
+    storagePrefix: theme.storagePrefix,
+  };
+}
+
+function ensureThemeWatch(theme: ThemeRef, tenantId: string): void {
+  const storage = getThemeStorage();
+  if (storage.kind !== 'local') return;
+  const key = `${tenantId}:${theme.id}`;
+  if (themeWatchUnsub.has(key)) return;
+  const unsub = storage.watch(theme, () => {
+    invalidateThemeCache(theme.id, tenantId);
+  });
+  themeWatchUnsub.set(key, unsub);
 }
 
 export async function assertOneLiveTheme(tenantId = DEFAULT_TENANT_ID): Promise<void> {
@@ -89,16 +142,57 @@ export async function assertOneLiveTheme(tenantId = DEFAULT_TENANT_ID): Promise<
   }
 }
 
-async function loadThemeFiles(themeId: Types.ObjectId | string): Promise<Record<string, string>> {
+async function loadFileMetas(themeId: Types.ObjectId | string): Promise<ThemeFileMeta[]> {
   const { ThemeFile } = await ensureDb();
   const themeFiles = await ThemeFile.find({ themeId }).lean();
-  const entries = await Promise.all(
-    themeFiles.map(async (f) => {
-      const content = await readThemeObjectContent(f.r2Key, f.content);
-      return { path: f.path, content };
-    }),
-  );
-  return filesToMap(entries);
+  return themeFiles.map((f) => ({
+    path: f.path,
+    storageKey: resolveThemeFileStorageKey(f),
+    content: f.content,
+  }));
+}
+
+  async function loadThemeFiles(
+  theme: {
+    _id: Types.ObjectId;
+    tenantId: string;
+    slug: string;
+    localRoot?: string;
+    storagePrefix?: string;
+  },
+  recorder?: ThemeLoadPhaseRecorder,
+): Promise<Record<string, string>> {
+  const storage = getThemeStorage();
+  const ref = toThemeRef(theme);
+
+  const filesDbStart = performance.now();
+  const metas = storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
+  recorder?.mark('theme-files-db', filesDbStart);
+
+  const loadStart = performance.now();
+  const files = await storage.loadTheme(ref, metas);
+  recorder?.mark(storage.kind === 'local' ? 'theme-fs' : 'theme-r2', loadStart);
+  recorder?.setMeta?.('theme-file-count', Object.keys(files).length);
+
+  if (storage.kind === 'local' && Object.keys(files).length > 0) {
+    const { ThemeFile } = await ensureDb();
+    const count = await ThemeFile.countDocuments({ themeId: theme._id });
+    if (count === 0) {
+      await syncThemeFileRows(
+        theme._id,
+        Object.entries(files).map(([path, content]) => ({
+          path,
+          storageKey: path,
+          size: Buffer.byteLength(content, 'utf8'),
+          checksum: checksum(content),
+          contentType: guessContentType(path),
+        })),
+      );
+    }
+  }
+
+  ensureThemeWatch(ref, theme.tenantId);
+  return files;
 }
 
 function toLoadedTheme(
@@ -109,6 +203,7 @@ function toLoadedTheme(
     version: string;
     status: 'live' | 'draft' | 'archived';
     previewToken: string;
+    updatedAt?: Date;
   },
   files: Record<string, string>,
 ): LoadedTheme {
@@ -121,67 +216,102 @@ function toLoadedTheme(
     previewToken: theme.previewToken,
     files,
     settings: loadThemeSettings(files),
+    updatedAt: theme.updatedAt?.toISOString(),
   };
+}
+
+async function syncThemeFileRows(
+  themeId: Types.ObjectId,
+  results: Array<{
+    path: string;
+    storageKey: string;
+    size: number;
+    checksum: string;
+    contentType: string;
+  }>,
+): Promise<void> {
+  const { ThemeFile } = await ensureDb();
+  await ThemeFile.deleteMany({ themeId });
+  if (results.length === 0) return;
+  await ThemeFile.insertMany(
+    results.map((r) => ({
+      themeId,
+      path: r.path,
+      storageKey: r.storageKey,
+      size: r.size,
+      checksum: r.checksum,
+      contentType: r.contentType,
+    })),
+  );
 }
 
 async function installThemeFiles(
   theme: {
     _id: Types.ObjectId;
     tenantId: string;
+    slug: string;
+    localRoot?: string;
     storagePrefix?: string;
   },
   files: ThemeZipFile[],
 ): Promise<void> {
-  const { Theme, ThemeFile } = await ensureDb();
-  const tenantId = theme.tenantId;
-  const themeId = theme._id.toString();
-  const prefix = themeStoragePrefix(tenantId, themeId);
+  const { Theme } = await ensureDb();
+  const storage = getThemeStorage();
+  const ref = toThemeRef(theme);
 
-  if (!theme.storagePrefix) {
+  const existingMetas =
+    storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
+  if (existingMetas && existingMetas.length > 0) {
+    await storage.deleteTheme(ref);
+  }
+
+  const installed = await storage.installTheme(
+    ref,
+    files.map((f) => ({ path: f.path, content: f.content, contentType: f.contentType })),
+  );
+
+  const prefix = installed.storagePrefix ?? themeStoragePrefix(theme.tenantId, theme._id.toString());
+  if (!theme.storagePrefix || theme.storagePrefix !== prefix) {
     await Theme.updateOne({ _id: theme._id }, { storagePrefix: prefix });
+    theme.storagePrefix = prefix;
   }
 
-  const existing = await ThemeFile.find({ themeId: theme._id }).lean();
-  if (existing.length > 0) {
-    const oldPrefix = ensureThemeStoragePrefix(theme);
-    await deleteThemePrefix(oldPrefix);
-    await ThemeFile.deleteMany({ themeId: theme._id });
-  }
+  await syncThemeFileRows(theme._id, installed.files);
+}
 
-  const rows = [];
-  for (const file of files) {
-    const stored = await writeThemeObject(tenantId, themeId, file.path, file.content);
-    rows.push({
-      themeId: theme._id,
-      path: file.path,
-      r2Key: stored.r2Key,
-      size: stored.size,
-      checksum: stored.checksum,
-      contentType: stored.contentType,
-    });
-  }
-
-  if (rows.length > 0) {
-    await ThemeFile.insertMany(rows);
-  }
+function localRootForDirectory(dir: string, slug: string): string | undefined {
+  const base = resolveThemeLocalRoot();
+  const absolute = resolve(dir);
+  const expected = themeRoot({ slug });
+  if (absolute === resolve(expected)) return undefined;
+  const rel = relative(base, absolute);
+  if (!rel.startsWith('..')) return rel.replace(/\\/g, '/');
+  return absolute;
 }
 
 export async function loadThemeById(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
+  recorder?: ThemeLoadPhaseRecorder,
 ): Promise<LoadedTheme | null> {
   const { Theme } = await ensureDb();
+
+  const dbStart = performance.now();
   const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
+  recorder?.mark('theme-db', dbStart);
+
   if (!theme) return null;
 
   const updatedAt = theme.updatedAt?.toISOString() ?? '';
   const cacheKey = themeCacheKey(themeId, tenantId, updatedAt);
   const cached = themeCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < THEME_CACHE_TTL_MS) {
+    recorder?.setMeta?.('theme-cache-hit', 1);
+    ensureThemeWatch(toThemeRef(theme), tenantId);
     return cached.theme;
   }
 
-  const files = await loadThemeFiles(theme._id);
+  const files = await loadThemeFiles(theme, recorder);
   const loaded = toLoadedTheme(theme, files);
   themeCache.set(cacheKey, { theme: loaded, cachedAt: Date.now() });
   return loaded;
@@ -192,10 +322,11 @@ export async function loadActiveTheme(tenantId = DEFAULT_TENANT_ID): Promise<Loa
   const theme = await Theme.findOne({
     tenantId,
     $or: [{ status: 'live' }, { isActive: true }],
-  }).lean();
+  })
+    .select('_id')
+    .lean();
   if (!theme) return null;
-  const files = await loadThemeFiles(theme._id);
-  return toLoadedTheme(theme, files);
+  return loadThemeById(theme._id.toString(), tenantId);
 }
 
 export async function loadThemeByPreview(
@@ -204,10 +335,57 @@ export async function loadThemeByPreview(
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<LoadedTheme | null> {
   const { Theme } = await ensureDb();
-  const theme = await Theme.findOne({ _id: themeId, tenantId, previewToken }).lean();
+  const theme = await Theme.findOne({ _id: themeId, tenantId, previewToken })
+    .select('_id')
+    .lean();
   if (!theme) return null;
-  const files = await loadThemeFiles(theme._id);
-  return toLoadedTheme(theme, files);
+  return loadThemeById(theme._id.toString(), tenantId);
+}
+
+/** Read a single theme asset without loading the full theme file map. */
+export async function getThemeAssetFile(
+  assetPath: string,
+  options: {
+    previewThemeId?: string;
+    previewToken?: string;
+    tenantId?: string;
+  } = {},
+): Promise<{ content: string; contentType: string } | null> {
+  const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
+  const path = assetPath.startsWith('assets/') ? assetPath : `assets/${assetPath}`;
+  const { Theme } = await ensureDb();
+
+  let themeId: string | null = null;
+
+  if (options.previewThemeId && options.previewToken) {
+    const theme = await Theme.findOne({
+      _id: options.previewThemeId,
+      tenantId,
+      previewToken: options.previewToken,
+    })
+      .select('_id')
+      .lean();
+    if (!theme) return null;
+    themeId = theme._id.toString();
+  } else {
+    const theme = await Theme.findOne({
+      tenantId,
+      $or: [{ status: 'live' }, { isActive: true }],
+    })
+      .select('_id')
+      .lean();
+    if (!theme) return null;
+    themeId = theme._id.toString();
+  }
+
+  const cached = getCachedLoadedTheme(themeId, tenantId);
+  if (cached) {
+    const content = cached.files[path];
+    if (content == null) return null;
+    return { content, contentType: guessContentType(path) };
+  }
+
+  return getThemeFile(themeId, path, tenantId);
 }
 
 export async function installThemeFromDirectory(
@@ -217,6 +395,7 @@ export async function installThemeFromDirectory(
   const { Theme } = await ensureDb();
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const files = await readThemeDirectory(dir);
+  const localRoot = getThemeStorageKind() === 'local' ? localRootForDirectory(dir, options.slug) : undefined;
 
   let theme = await Theme.findOne({ tenantId, slug: options.slug });
   if (!theme) {
@@ -228,12 +407,14 @@ export async function installThemeFromDirectory(
       isActive: Boolean(options.activate),
       tenantId,
       storagePrefix: '',
+      localRoot,
       previewToken: randomBytes(24).toString('hex'),
       publishedAt: options.activate ? new Date() : undefined,
       lastSavedAt: new Date(),
     });
   } else {
     theme.version = options.version ?? theme.version;
+    if (localRoot !== undefined) theme.localRoot = localRoot;
     await theme.save();
   }
 
@@ -251,6 +432,7 @@ export async function installThemeFromDirectory(
   }
 
   await assertOneLiveTheme(tenantId);
+  invalidateThemeCache(theme._id.toString(), tenantId);
   return { themeId: theme._id.toString() };
 }
 
@@ -260,7 +442,7 @@ export async function installThemeFromZip(
 ): Promise<{ themeId: string }> {
   const { Theme } = await ensureDb();
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
-  const files = await extractThemeZip(buffer);
+  const storage = getThemeStorage();
 
   const theme = await Theme.create({
     name: options.name,
@@ -274,7 +456,14 @@ export async function installThemeFromZip(
     lastSavedAt: new Date(),
   });
 
-  await installThemeFiles(theme, files);
+  const ref = toThemeRef(theme);
+  const installed = await storage.importTheme(ref, buffer);
+  if (installed.storagePrefix) {
+    theme.storagePrefix = installed.storagePrefix;
+    await theme.save();
+  }
+  await syncThemeFileRows(theme._id, installed.files);
+  invalidateThemeCache(theme._id.toString(), tenantId);
   return { themeId: theme._id.toString() };
 }
 
@@ -286,9 +475,9 @@ export async function exportThemeAsZip(
   const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
   if (!theme) throw new Error('Theme not found');
 
-  const files = await loadThemeFiles(theme._id);
-  const entries = Object.entries(files).map(([path, content]) => ({ path, content }));
-  const buffer = await buildThemeZip(entries);
+  const storage = getThemeStorage();
+  const metas = storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
+  const buffer = await storage.exportTheme(toThemeRef(theme), metas);
   return {
     buffer,
     filename: buildThemeZipFilename(theme.name),
@@ -312,6 +501,7 @@ export async function publishTheme(themeId: string, tenantId = DEFAULT_TENANT_ID
   draft.isActive = true;
   draft.publishedAt = new Date();
   await draft.save();
+  invalidateThemeCache(themeId, tenantId);
   await assertOneLiveTheme(tenantId);
 }
 
@@ -319,11 +509,12 @@ export async function duplicateTheme(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<{ themeId: string }> {
-  const { Theme } = await ensureDb();
+  const { Theme, ThemeFile } = await ensureDb();
   const source = await Theme.findOne({ _id: themeId, tenantId });
   if (!source) throw new Error('Theme not found');
   const suffix = Date.now().toString(36);
   const newSlug = `${source.slug}-copy-${suffix}`;
+  const storage = getThemeStorage();
 
   const copy = await Theme.create({
     name: `${source.name} (Copy)`,
@@ -333,18 +524,40 @@ export async function duplicateTheme(
     isActive: false,
     tenantId,
     sourceThemeId: source._id,
+    storagePrefix: storage.kind === 'r2' ? themeStoragePrefix(tenantId, 'pending') : '',
     previewToken: randomBytes(24).toString('hex'),
     lastSavedAt: new Date(),
   });
 
-  const filesMap = await loadThemeFiles(source._id);
-  const zipFiles = Object.entries(filesMap).map(([path, content]) => ({
-    path,
-    content,
-    contentType: guessContentType(path),
-  }));
-  await installThemeFiles(copy, zipFiles);
+  if (storage.kind === 'r2') {
+    copy.storagePrefix = themeStoragePrefix(tenantId, copy._id.toString());
+    await copy.save();
+  }
 
+  const sourceRef = toThemeRef(source);
+  const destRef = toThemeRef(copy);
+  await storage.duplicateTheme(sourceRef, destRef);
+
+  const sourceFiles = await ThemeFile.find({ themeId: source._id }).lean();
+  const rows = sourceFiles.map((f) => {
+    const storageKey =
+      storage.kind === 'local'
+        ? f.path
+        : buildThemeObjectKey(tenantId, copy._id.toString(), f.path);
+    return {
+      themeId: copy._id,
+      path: f.path,
+      storageKey,
+      size: f.size,
+      checksum: f.checksum,
+      contentType: f.contentType,
+    };
+  });
+  if (rows.length > 0) {
+    await ThemeFile.insertMany(rows);
+  }
+
+  invalidateThemeCache(themeId, tenantId);
   return { themeId: copy._id.toString() };
 }
 
@@ -359,16 +572,23 @@ export async function deleteTheme(themeId: string, tenantId = DEFAULT_TENANT_ID)
     throw new Error('Cannot delete the only theme');
   }
 
-  const prefix = ensureThemeStoragePrefix(theme);
-  await deleteThemePrefix(prefix);
+  const storage = getThemeStorage();
+  await storage.deleteTheme(toThemeRef(theme));
   await ThemeFile.deleteMany({ themeId: theme._id });
   await Theme.deleteOne({ _id: theme._id });
+  invalidateThemeCache(themeId, tenantId);
+
+  const watchKey = `${tenantId}:${themeId}`;
+  themeWatchUnsub.get(watchKey)?.();
+  themeWatchUnsub.delete(watchKey);
+
   await assertOneLiveTheme(tenantId);
 }
 
 export async function listThemes(tenantId = DEFAULT_TENANT_ID): Promise<ThemeListItem[]> {
   const { Theme } = await ensureDb();
   const items = await Theme.find({ tenantId }).sort({ status: 1, name: 1 }).lean();
+  const storageKind = getThemeStorageKind();
   return items.map((t) => ({
     id: t._id.toString(),
     name: t.name,
@@ -382,6 +602,7 @@ export async function listThemes(tenantId = DEFAULT_TENANT_ID): Promise<ThemeLis
     lastSavedAt: t.lastSavedAt,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
+    storageKind,
   }));
 }
 
@@ -404,6 +625,7 @@ export async function getThemeMetadata(themeId: string, tenantId = DEFAULT_TENAN
     lastSavedAt: theme.lastSavedAt,
     createdAt: theme.createdAt,
     updatedAt: theme.updatedAt,
+    storageKind: getThemeStorageKind(),
     files: filePaths.sort(),
   };
 }
@@ -424,10 +646,27 @@ export async function getThemeFile(
   if (!theme) return null;
 
   const file = await ThemeFile.findOne({ themeId: theme._id, path }).lean();
-  if (!file) return null;
+  if (!file && getThemeStorageKind() !== 'local') return null;
 
-  const content = await readThemeObjectContent(file.r2Key, file.content);
-  return { path: file.path, content, contentType: file.contentType };
+  const storage = getThemeStorage();
+  const meta = file
+    ? {
+        path: file.path,
+        storageKey: resolveThemeFileStorageKey(file),
+        content: file.content,
+      }
+    : undefined;
+
+  try {
+    const content = await storage.readFile(toThemeRef(theme), path, meta);
+    return {
+      path,
+      content,
+      contentType: file?.contentType ?? guessContentType(path),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function upsertThemeFile(
@@ -436,13 +675,17 @@ export async function upsertThemeFile(
   content: string,
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<{ isLive: boolean }> {
+  if (!validateThemePath(path)) {
+    throw new Error('Invalid theme file path');
+  }
   const { Theme, ThemeFile } = await ensureDb();
   const theme = await Theme.findOne({ _id: themeId, tenantId });
   if (!theme) throw new Error('Theme not found');
 
-  const stored = await writeThemeObject(tenantId, themeId, path, content);
+  const storage = getThemeStorage();
+  const stored = await storage.writeFile(toThemeRef(theme), path, content);
 
-  if (!theme.storagePrefix) {
+  if (!theme.storagePrefix && storage.kind === 'r2') {
     theme.storagePrefix = themeStoragePrefix(tenantId, themeId);
   }
 
@@ -452,12 +695,12 @@ export async function upsertThemeFile(
       $set: {
         themeId: theme._id,
         path,
-        r2Key: stored.r2Key,
+        storageKey: stored.storageKey,
         size: stored.size,
         checksum: stored.checksum,
         contentType: stored.contentType,
       },
-      $unset: { content: '' },
+      $unset: { content: '', r2Key: '' },
     },
     { upsert: true, new: true },
   );
@@ -482,13 +725,20 @@ export async function deleteThemeFile(
   if (!theme) throw new Error('Theme not found');
 
   const file = await ThemeFile.findOne({ themeId: theme._id, path });
-  if (!file) throw new Error('File not found');
+  if (!file && getThemeStorageKind() !== 'local') {
+    throw new Error('File not found');
+  }
 
-  await deleteThemeObject(file.r2Key);
-  await ThemeFile.deleteOne({ themeId: theme._id, path });
+  const storage = getThemeStorage();
+  const storageKey = file ? resolveThemeFileStorageKey(file) : path;
+  await storage.deleteFile(toThemeRef(theme), path, storageKey);
+  if (file) {
+    await ThemeFile.deleteOne({ themeId: theme._id, path });
+  }
 
   theme.lastSavedAt = new Date();
   await theme.save();
+  invalidateThemeCache(themeId, tenantId);
   return { isLive: theme.status === 'live' };
 }
 
@@ -530,9 +780,13 @@ export async function updateThemeSettingsForTheme(
 export async function getThemeSchemas(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
-  options?: { sectionTypes?: string[]; scope?: 'all' | 'template' },
+  options?: {
+    sectionTypes?: string[];
+    scope?: 'all' | 'template';
+    theme?: LoadedTheme;
+  },
 ) {
-  const theme = await loadThemeById(themeId, tenantId);
+  const theme = options?.theme ?? (await loadThemeById(themeId, tenantId));
   if (!theme) throw new Error('Theme not found');
 
   const allTypes = listSectionTypes(theme.files);
@@ -655,6 +909,7 @@ export async function getCustomizerBootstrap(
       version: theme.version,
       status: theme.status,
       previewToken: theme.previewToken,
+      storageKind: getThemeStorageKind(),
     },
     pages: pageItems,
     page: selectedPage,
@@ -701,7 +956,19 @@ export async function saveTemplateCustomization(
   };
 }
 
-export async function getThemeHealth(themeId?: string, tenantId = DEFAULT_TENANT_ID): Promise<{
+export async function getThemeHealth(
+  themeId?: string,
+  tenantId = DEFAULT_TENANT_ID,
+  options?: {
+    files?: Record<string, string>;
+    filePaths?: string[];
+    metaObjects?: Array<{
+      slug: string;
+      templates?: { templateKey?: string };
+      routing?: { archiveEnabled?: boolean };
+    }>;
+  },
+): Promise<{
   issues: ThemeHealthIssue[];
   themeId: string | null;
 }> {
@@ -713,11 +980,14 @@ export async function getThemeHealth(themeId?: string, tenantId = DEFAULT_TENANT
 
   if (!theme) return { issues: [], themeId: null };
 
-  const themeFiles = await ThemeFile.find({ themeId: theme._id }).lean();
-  const filePaths = themeFiles.map((f) => f.path);
-  const filesMap = await loadThemeFiles(theme._id);
+  const filePaths =
+    options?.filePaths ??
+    (await ThemeFile.find({ themeId: theme._id }).lean()).map((f) => f.path);
+  const filesMap = options?.files ?? (await loadThemeFiles(theme));
 
-  const metaObjects = await MetaObjectDefinition.find({ tenantId, status: 'active' }).lean();
+  const metaObjects =
+    options?.metaObjects ??
+    (await MetaObjectDefinition.find({ tenantId, status: 'active' }).lean());
   const issues = auditThemeHealth({
     themeFiles: filePaths,
     metaObjects: metaObjects.map((m) => ({
@@ -799,6 +1069,8 @@ export async function renderThemePreview(
     metaTemplateKey: options.metaTemplateKey,
     metaEntryTemplateSuffix: options.metaEntryTemplateSuffix,
     context: options.context,
+    themeId: theme.id,
+    themeUpdatedAt: theme.updatedAt,
   });
 
   return { html, status: 200 };
@@ -816,9 +1088,9 @@ export async function renderThemeSection(
   const theme = await loadThemeById(themeId, tenantId);
   if (!theme) throw new Error('Theme not found');
 
-  const { engine, fileMap } = createLiquidEngine({
-    files: theme.files,
-    locales: {},
+  const { engine, fileMap } = getOrCreateLiquidEngine(theme.files, {
+    themeId: theme.id,
+    themeUpdatedAt: theme.updatedAt,
   });
 
   const baseContext = {
@@ -837,6 +1109,14 @@ export async function renderThemeSection(
     instance: options.instance,
     context: baseContext,
   });
+}
+
+export function getThemeStorageStatus(): { kind: 'local' | 'r2'; label: string } {
+  const kind = getThemeStorageKind();
+  return {
+    kind,
+    label: kind === 'local' ? 'Local files' : 'Cloud (R2)',
+  };
 }
 
 export type { ThemeHealthIssue };

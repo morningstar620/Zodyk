@@ -15,8 +15,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/((?!assets/|zodyk-nav\\.js|zodyk-design-mode\\.js).*)',
-        headers: [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }],
+        // Live HTML: CDN may cache; route handler overrides for preview/designMode.
+        source: '/((?!assets/|zodyk-nav\\.js|zodyk-design-mode\\.js|api/).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=60, stale-while-revalidate=600',
+          },
+        ],
       },
     ];
   },

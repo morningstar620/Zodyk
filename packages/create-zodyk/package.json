@@ -1,0 +1,46 @@
+{
+  "name": "create-zodyk",
+  "version": "0.1.0",
+  "description": "Scaffold and set up a self-hosted Zodyk website OS project (npm create zodyk).",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "zodyk",
+    "cms",
+    "create",
+    "scaffold",
+    "cli",
+    "starter"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morningstar620/Zodyk.git",
+    "directory": "packages/create-zodyk"
+  },
+  "bin": {
+    "create-zodyk": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "giget": "^1.2.3",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsup": "^8.3.5",
+    "typescript": "^5.8.3"
+  }
+}

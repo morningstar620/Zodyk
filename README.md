@@ -10,7 +10,21 @@ This repository is the **v1.0 Foundation scaffold**: monorepo structure, stub pa
 - **pnpm** 9+
 - **Docker** (for local MongoDB and Redis)
 
-## Quick start
+## Quick start (one command)
+
+Scaffold and configure a new project the same way you would with Next.js or Vite:
+
+```bash
+npm create zodyk@latest my-site
+# or: pnpm create zodyk my-site
+# or: npx create-zodyk my-site
+```
+
+This downloads the project, runs a setup wizard (MongoDB URI, admin account, optional R2/SMTP),
+generates `.env` with fresh secrets, and installs dependencies. See
+[`packages/create-zodyk`](./packages/create-zodyk) for all flags.
+
+## Manual setup
 
 ### 1. Install dependencies
 
@@ -34,6 +48,8 @@ cp .env.example .env
 
 Edit `.env` as needed for local development.
 
+**Theme storage:** By default in development, themes use the local filesystem (`THEME_STORAGE=local`, files under `themes/{slug}`). Customizer and code-editor saves write directly to those files. In production, set `THEME_STORAGE=r2` (and configure R2) so theme edits are stored in Cloudflare R2. Media library storage stays independent of theme storage.
+
 ### 4. Run development servers
 
 ```bash
@@ -44,6 +60,8 @@ pnpm dev
 |-----|-----|
 | Admin panel | http://localhost:5001 |
 | Public website | http://localhost:5003 |
+
+> Tip: run a single app with `pnpm --filter @zodyk/admin dev` or `pnpm --filter @zodyk/website dev`.
 
 ### 5. Build
 

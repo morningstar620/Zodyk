@@ -14,7 +14,20 @@ const nextConfig: NextConfig = {
     '@zodyk/database',
     '@zodyk/builder',
     '@zodyk/theme-engine',
+    '@zodyk/theme-language',
+    '@zodyk/theme-lsp',
+    '@zodyk/liquid',
   ],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.conditionNames = ['browser', 'import', 'require', 'default'];
+    }
+    config.output = {
+      ...config.output,
+      globalObject: 'self',
+    };
+    return config;
+  },
   experimental: {
     optimizePackageImports: ['@zodyk/builder'],
   },

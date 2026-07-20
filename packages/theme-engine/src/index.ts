@@ -15,6 +15,8 @@ export {
   getSectionTypesFromTemplate,
   resolveTemplatePath,
   mergeTemplateWithOverrides,
+  getOrCreateLiquidEngine,
+  invalidateLiquidEngineCache,
   type RenderContextInput,
   type ShopContext,
   type PageLiquidContext,
@@ -25,6 +27,7 @@ export {
   loadActiveTheme,
   loadThemeById,
   loadThemeByPreview,
+  getThemeAssetFile,
   installThemeFromDirectory,
   installThemeFromZip,
   exportThemeAsZip,
@@ -51,10 +54,24 @@ export {
   renderThemePreview,
   renderThemeSection,
   assertOneLiveTheme,
+  getThemeStorageStatus,
   type LoadedTheme,
   type ThemeListItem,
   type ThemeHealthIssue,
+  type ThemeLoadPhaseRecorder,
 } from './theme-store';
+
+export {
+  getThemeStorage,
+  getThemeStorageKind,
+  createThemeStorage,
+  resolveThemeStorageKind,
+  themePath,
+  themeRoot,
+  resolveThemeLocalRoot,
+  type ThemeStorage,
+  type ThemeStorageKind,
+} from './storage';
 
 export {
   resolveRoute,

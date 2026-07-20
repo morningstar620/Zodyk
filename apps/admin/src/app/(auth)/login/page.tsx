@@ -12,6 +12,7 @@ import {
   CardTitle,
   Input,
   Label,
+  Logo,
 } from '@zodyk/shared-ui';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
@@ -63,6 +64,7 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
+        <Logo width={40} height={40} className="mb-2 h-10 w-10" />
         <CardTitle>Sign in to Zodyk</CardTitle>
         <CardDescription>Enter your credentials to access the admin panel</CardDescription>
       </CardHeader>

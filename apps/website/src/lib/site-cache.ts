@@ -2,8 +2,9 @@ import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import { connectDatabase, getModels } from '@zodyk/database';
 import { loadActiveTheme, type LoadedTheme } from '@zodyk/theme-engine';
 
-const TTL_MS = process.env.NODE_ENV === 'development' ? 10_000 : 60_000;
-const HTML_TTL_MS = process.env.NODE_ENV === 'development' ? 15_000 : 30_000;
+/** Rely on publish/revalidate invalidation rather than short expiry. */
+const TTL_MS = process.env.NODE_ENV === 'development' ? 5 * 60_000 : 15 * 60_000;
+const HTML_TTL_MS = process.env.NODE_ENV === 'development' ? 5 * 60_000 : 15 * 60_000;
 
 interface SiteData {
   theme: LoadedTheme;

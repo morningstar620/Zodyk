@@ -1,5 +1,4 @@
 import {
-  DEFAULT_TENANT_ID,
   mergeTemplateWithOverrides,
   resolveTemplatePath,
   templateJsonSchema,
@@ -64,6 +63,47 @@ export interface RenderContextInput {
   menus?: Record<string, Record<string, unknown>>;
 }
 
+const liquidEngineCache = new Map<
+  string,
+  { engine: Liquid; fileMap: ThemeFileMap; cachedAt: number }
+>();
+
+function liquidEngineCacheKey(themeId: string, updatedAt: string): string {
+  return `${themeId}:${updatedAt}`;
+}
+
+export function invalidateLiquidEngineCache(themeId?: string): void {
+  if (!themeId) {
+    liquidEngineCache.clear();
+    return;
+  }
+  const prefix = `${themeId}:`;
+  for (const key of liquidEngineCache.keys()) {
+    if (key.startsWith(prefix)) liquidEngineCache.delete(key);
+  }
+}
+
+export function getOrCreateLiquidEngine(
+  files: Record<string, string>,
+  options?: { themeId?: string; themeUpdatedAt?: string },
+): { engine: Liquid; fileMap: ThemeFileMap } {
+  const locales = parseLocales(files);
+  const themeId = options?.themeId;
+  const updatedAt = options?.themeUpdatedAt ?? '';
+
+  if (themeId) {
+    const key = liquidEngineCacheKey(themeId, updatedAt);
+    const cached = liquidEngineCache.get(key);
+    if (cached) return { engine: cached.engine, fileMap: cached.fileMap };
+
+    const created = createLiquidEngine({ files, locales });
+    liquidEngineCache.set(key, { ...created, cachedAt: Date.now() });
+    return created;
+  }
+
+  return createLiquidEngine({ files, locales });
+}
+
 export function buildBaseContext(input: RenderContextInput): Record<string, unknown> {
   return {
     shop: input.shop,
@@ -115,6 +155,8 @@ export async function renderThemedPage(
     sectionOverrides?: Record<string, SectionOverride>;
     context: RenderContextInput;
     layoutPath?: string;
+    themeId?: string;
+    themeUpdatedAt?: string;
   },
 ): Promise<{ html: string; templatePath: string | null }> {
   const filePaths = Object.keys(files);
@@ -136,8 +178,10 @@ export async function renderThemedPage(
     : templateJsonSchema.parse(JSON.parse(files[resolved!.path]!));
 
   const merged = mergeTemplateWithOverrides(templateRaw, options.sectionOverrides ?? {});
-  const locales = parseLocales(files);
-  const { engine, fileMap } = createLiquidEngine({ files, locales });
+  const { engine, fileMap } = getOrCreateLiquidEngine(files, {
+    themeId: options.themeId,
+    themeUpdatedAt: options.themeUpdatedAt,
+  });
   const baseContext = buildBaseContext(options.context);
   const contentForLayout = await renderTemplateJson(engine, fileMap, merged, baseContext);
   const layoutPath = options.layoutPath ?? 'layout/theme.liquid';
