@@ -26,12 +26,28 @@ const nextConfig: NextConfig = {
       ...config.output,
       globalObject: 'self',
     };
+
+    // Optional native/peer deps pulled in by mongodb and sharp during static analysis.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      aws4: false,
+      '@img/sharp-libvips-dev/include': false,
+      '@img/sharp-libvips-dev/cplusplus': false,
+      '@img/sharp-wasm32/versions': false,
+    };
+
     return config;
   },
   experimental: {
     optimizePackageImports: ['@zodyk/builder'],
   },
-  serverExternalPackages: ['sharp', '@aws-sdk/client-s3', '@img/sharp-darwin-arm64'],
+  serverExternalPackages: [
+    'mongoose',
+    'mongodb',
+    'sharp',
+    '@aws-sdk/client-s3',
+    '@img/sharp-darwin-arm64',
+  ],
   async redirects() {
     return [
       {
