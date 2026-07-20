@@ -11,7 +11,30 @@ const nextConfig: NextConfig = {
     '@zodyk/shared-ui',
     '@zodyk/liquid',
     '@zodyk/theme-engine',
+    '@zodyk/media',
   ],
+  serverExternalPackages: [
+    'mongoose',
+    'mongodb',
+    'sharp',
+    '@aws-sdk/client-s3',
+  ],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.conditionNames = ['browser', 'import', 'require', 'default'];
+    }
+
+    // Optional native/peer deps pulled in by mongodb and sharp during static analysis.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      aws4: false,
+      '@img/sharp-libvips-dev/include': false,
+      '@img/sharp-libvips-dev/cplusplus': false,
+      '@img/sharp-wasm32/versions': false,
+    };
+
+    return config;
+  },
   async headers() {
     return [
       {

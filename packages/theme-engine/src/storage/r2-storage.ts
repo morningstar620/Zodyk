@@ -7,8 +7,8 @@ import {
   getObjectAsString,
   listObjects,
   putObject,
-  requireStorageConfig,
-} from '@zodyk/media';
+} from '@zodyk/media/objects';
+import { requireStorageConfig } from '@zodyk/media/config';
 import { checksum } from '../install';
 import { buildThemeZip, extractThemeZip } from '../zip';
 import { guessContentType } from './content-type';

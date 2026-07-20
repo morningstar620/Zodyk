@@ -7,6 +7,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./objects": {
+      "types": "./src/objects.ts",
+      "default": "./src/objects.ts"
+    },
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
     }
   },
   "scripts": {

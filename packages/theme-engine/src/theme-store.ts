@@ -36,7 +36,7 @@ import {
   validateThemePath,
   type ThemeZipFile,
 } from './zip';
-import { buildThemeObjectKey } from '@zodyk/media';
+import { buildThemeObjectKey } from '@zodyk/media/objects';
 
 export interface LoadedTheme {
   id: string;

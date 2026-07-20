@@ -3,7 +3,7 @@ import type { ITheme } from '@zodyk/database';
 import {
   buildThemeObjectKey,
   buildThemeStoragePrefix,
-} from '@zodyk/media';
+} from '@zodyk/media/objects';
 
 /** @deprecated Import from `./storage` — kept for existing imports. */
 export {
