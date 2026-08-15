@@ -15,6 +15,10 @@
     "./settings": {
       "types": "./src/settings/handlers.ts",
       "default": "./src/settings/handlers.ts"
+    },
+    "./payments": {
+      "types": "./src/payments/handlers.ts",
+      "default": "./src/payments/handlers.ts"
     }
   },
   "scripts": {
@@ -26,8 +30,10 @@
     "@zodyk/core": "workspace:*",
     "@zodyk/database": "workspace:*",
     "@zodyk/media": "workspace:*",
+    "@zodyk/payments": "workspace:*",
     "@zodyk/theme-engine": "workspace:*",
-    "@zodyk/theme-language": "workspace:*"
+    "@zodyk/theme-language": "workspace:*",
+    "mongoose": "^8.15.1"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

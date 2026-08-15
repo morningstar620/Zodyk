@@ -10,11 +10,26 @@ export interface IR2Settings {
   endpoint?: string;
 }
 
+export interface IGatewayCredentialStore {
+  /** Encrypted JSON blob of gateway credentials */
+  secretsEncrypted?: string;
+  /** Non-secret public fields (key ids, merchant ids, etc.) */
+  publicFields?: Record<string, string>;
+  configured: boolean;
+}
+
+export interface IPaymentsSettings {
+  activeGateway?: string;
+  mode: 'test' | 'live';
+  gateways: Record<string, IGatewayCredentialStore>;
+}
+
 export interface IPlatformSettings extends Document {
   tenantId: string;
   media?: {
     r2?: IR2Settings;
   };
+  payments?: IPaymentsSettings;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,12 +46,31 @@ const r2SettingsSchema = new Schema<IR2Settings>(
   { _id: false },
 );
 
+const gatewayCredentialStoreSchema = new Schema<IGatewayCredentialStore>(
+  {
+    secretsEncrypted: { type: String },
+    publicFields: { type: Map, of: String },
+    configured: { type: Boolean, required: true, default: false },
+  },
+  { _id: false },
+);
+
+const paymentsSettingsSchema = new Schema<IPaymentsSettings>(
+  {
+    activeGateway: { type: String },
+    mode: { type: String, enum: ['test', 'live'], default: 'test' },
+    gateways: { type: Map, of: gatewayCredentialStoreSchema, default: {} },
+  },
+  { _id: false },
+);
+
 const platformSettingsSchema = new Schema<IPlatformSettings>(
   {
     tenantId: { type: String, required: true, default: DEFAULT_TENANT_ID },
     media: {
       r2: r2SettingsSchema,
     },
+    payments: paymentsSettingsSchema,
   },
   { timestamps: true },
 );

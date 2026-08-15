@@ -1,0 +1,38 @@
+{
+  "name": "@zodyk/api-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "smoke": "tsx src/smoke.ts"
+  },
+  "dependencies": {
+    "@zodyk/api": "workspace:*",
+    "@zodyk/auth": "workspace:*",
+    "@zodyk/core": "workspace:*",
+    "@zodyk/database": "workspace:*",
+    "@zodyk/media": "workspace:*",
+    "@zodyk/payments": "workspace:*",
+    "@zodyk/theme-engine": "workspace:*",
+    "@zodyk/theme-language": "workspace:*",
+    "compression": "^1.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.15.1"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.7.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

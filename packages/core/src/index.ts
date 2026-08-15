@@ -13,6 +13,7 @@ export type TenantContext = z.infer<typeof tenantContextSchema>;
 export * from './permissions';
 export * from './schemas/auth';
 export * from './schemas/user';
+export * from './schemas/payments';
 export * from './meta';
 export * from './entity';
 export * from './media';

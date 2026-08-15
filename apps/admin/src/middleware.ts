@@ -14,7 +14,9 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isPublic =
     publicPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    pathname.startsWith('/api/auth');
+    pathname.startsWith('/api/auth') ||
+    // REST is authenticated in handlers (cookie JWT, Bearer tokens, webhooks).
+    pathname.startsWith('/api/v1');
 
   if (isPublic) return NextResponse.next();
 

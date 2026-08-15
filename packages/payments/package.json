@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./gateways": {
+      "types": "./src/gateways/index.ts",
+      "default": "./src/gateways/index.ts"
     }
   },
   "scripts": {
@@ -14,9 +18,15 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@zodyk/core": "workspace:*"
+    "@zodyk/auth": "workspace:*",
+    "@zodyk/core": "workspace:*",
+    "@zodyk/database": "workspace:*",
+    "razorpay": "^2.9.6",
+    "stripe": "^18.0.0",
+    "zod": "^3.25.51"
   },
   "devDependencies": {
+    "@types/node": "^22.15.21",
     "typescript": "^5.8.3"
   }
 }

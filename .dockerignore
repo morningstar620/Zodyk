@@ -1,0 +1,13 @@
+node_modules
+.git
+.next
+dist
+coverage
+.env
+.env.*
+!.env.example
+themes
+**/*.test.ts
+**/__tests__
+apps/admin/.next
+apps/website/.next

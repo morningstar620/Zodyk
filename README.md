@@ -61,7 +61,7 @@ pnpm dev
 | Admin panel | http://localhost:5001 |
 | Public website | http://localhost:5003 |
 
-> Tip: run a single app with `pnpm --filter @zodyk/admin dev` or `pnpm --filter @zodyk/website dev`.
+> Tip: run a single app with `pnpm --filter @zodyk/admin dev`, `pnpm --filter @zodyk/website dev`, or `pnpm --filter @zodyk/api-server dev`.
 
 ### 5. Build
 
@@ -73,7 +73,9 @@ pnpm build
 
 ```
 apps/
-  admin/          # Administration panel (Next.js)
+  admin/          # Administration panel (Next.js + NextAuth)
+  website/        # Public website renderer (Next.js)
+  api/            # REST API (Express) — Docker / self-hosted
   website/        # Public site renderer (Next.js)
 
 packages/
@@ -86,7 +88,7 @@ packages/
   workflow/       # Automation engine (stub)
   forms/          # Form builder (stub)
   notifications/  # Email/SMS/WhatsApp (stub)
-  payments/       # Payments module (stub)
+  payments/       # Payment gateway layer (Stripe, Razorpay, Custom, …)
   builder/        # Visual builder (stub)
   theme-engine/   # Theme install/export (stub)
   api/            # REST & GraphQL API (stub)
@@ -106,7 +108,7 @@ infrastructure/
 | `pnpm build` | Build all apps and packages |
 | `pnpm lint` | Lint across the workspace |
 | `pnpm typecheck` | Type-check across the workspace |
-| `pnpm docker:up` | Start MongoDB and Redis |
+| `pnpm docker:up` | Start MongoDB, Redis, and the API |
 | `pnpm docker:down` | Stop local Docker services |
 
 ## Documentation

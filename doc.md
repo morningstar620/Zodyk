@@ -57,7 +57,7 @@ Provide a modern website operating system that delivers simplicity for content e
 
 | **Runtime**    | Node.js                                      |
 | -------------- | -------------------------------------------- |
-| **Framework**  | Next.js Route Handlers + Server Actions      |
+| **Framework**  | Express (`apps/api`) + NextAuth on admin     |
 | **Validation** | Zod                                          |
 | **ORM**        | Mongoose                                     |
 | **Database**   | MongoDB (primary)                            |
@@ -91,8 +91,9 @@ Zodyk is organized as a monorepo to enforce clean package boundaries, enable ind
 
 **apps/**
 
-- admin - Next.js administration panel
+- admin - Next.js administration panel (UI + NextAuth; proxies `/api/v1` to the API)
 - website - Public-facing Next.js site renderer
+- api - Express REST API (`/api/v1/*`), Docker-hosted
 
 **packages/**
 

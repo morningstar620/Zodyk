@@ -1,6 +1,7 @@
 export { handlers, auth, signIn, signOut, sessionToAuthSession } from './handlers';
 export { authConfig } from './config';
 export { authConfig as edgeAuthConfig } from './auth.config';
+export { resolveSessionFromHeaders } from './session-from-request';
 export * from './rbac/check';
 export * from './rbac/middleware';
 export * from './security/password';

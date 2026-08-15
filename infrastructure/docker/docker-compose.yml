@@ -1,3 +1,6 @@
+# Local data + API services for Zodyk.
+# From repo root: pnpm docker:up
+
 services:
   mongodb:
     image: mongo:7
@@ -24,6 +27,40 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    container_name: zodyk-api
+    restart: unless-stopped
+    ports:
+      - '${API_PORT:-5002}:5002'
+    env_file:
+      - ../../.env
+    environment:
+      API_PORT: '5002'
+      # In-network URIs (override host localhost values from .env)
+      MONGODB_URI: mongodb://mongodb:27017/zodyk
+      REDIS_URL: redis://redis:6379
+      API_URL: ${API_URL:-http://localhost:5002}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5002/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
 
 volumes:
   zodyk-mongodb-data:

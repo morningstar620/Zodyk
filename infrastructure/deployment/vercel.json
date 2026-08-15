@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "comment": "Monorepo deploy targets — configure per-app projects in Vercel dashboard",
+  "comment": "Monorepo deploy targets — configure per-app projects in Vercel dashboard. REST /api/v1 is hosted by apps/api (Docker), not Vercel. Set API_UPSTREAM_URL on the admin project.",
   "projects": {
     "admin": {
       "path": "apps/admin",

@@ -51,6 +51,10 @@ export const PERMISSIONS = {
   MENUS_CREATE: 'menus:create',
   MENUS_UPDATE: 'menus:update',
   MENUS_DELETE: 'menus:delete',
+  PAYMENTS_READ: 'payments:read',
+  PAYMENTS_CREATE: 'payments:create',
+  PAYMENTS_REFUND: 'payments:refund',
+  PAYMENTS_SETTINGS: 'payments:settings',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS] | string;
@@ -105,6 +109,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleSlug, string[]> = {
     'menus:*',
     'settings:*',
     'api_tokens:*',
+    'payments:*',
     PERMISSIONS.AUDIT_READ,
   ],
   [ROLE_SLUGS.EDITOR]: [

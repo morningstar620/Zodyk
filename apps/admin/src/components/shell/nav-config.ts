@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Box,
   Cog,
+  CreditCard,
   FileText,
   FolderOpen,
   Home,
@@ -69,6 +70,7 @@ export const navGroups: NavGroup[] = [
         icon: Cog,
         prefetch: '/api/v1/system-entities',
       },
+      { href: '/payments', label: 'Payments', icon: CreditCard, prefetch: '/api/v1/payments' },
       { href: '/users', label: 'Users', icon: Users, prefetch: '/api/v1/users' },
       { href: '/settings', label: 'Settings', icon: Settings, prefetch: null },
     ],
@@ -92,6 +94,7 @@ export function getBreadcrumbs(pathname: string): { label: string; href?: string
     users: 'Users',
     roles: 'Roles',
     settings: 'Settings',
+    payments: 'Payments',
     menus: 'Menus',
     forms: 'Forms',
     search: 'Search',

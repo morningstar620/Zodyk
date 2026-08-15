@@ -5,6 +5,16 @@ import type { NextConfig } from 'next';
 // Load monorepo root .env (Next.js only reads .env from apps/admin by default)
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
+function apiUpstream(): string | undefined {
+  const configured = process.env.API_UPSTREAM_URL?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+  // After the Express split, /api/v1 lives on the API server. Default in local dev.
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://127.0.0.1:5002';
+  }
+  return undefined;
+}
+
 const nextConfig: NextConfig = {
   transpilePackages: [
     '@zodyk/core',
@@ -54,6 +64,16 @@ const nextConfig: NextConfig = {
         source: '/auth/login',
         destination: '/login',
         permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    const upstream = apiUpstream();
+    if (!upstream) return [];
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${upstream}/api/v1/:path*`,
       },
     ];
   },

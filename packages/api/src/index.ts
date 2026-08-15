@@ -1,24 +1,20 @@
 import {
   AuthError,
-  auth,
-  sessionToAuthSession,
-  verifyApiToken,
+  resolveSessionFromHeaders,
   type AuthSession,
 } from '@zodyk/auth';
 import { z } from '@zodyk/core';
+import { handlePaymentsError } from './payments/handlers';
 
+/** Framework-agnostic session resolution (Bearer token or Auth.js JWT cookie). */
 export async function getApiSession(request: Request): Promise<AuthSession | null> {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    return verifyApiToken(token);
-  }
-
-  const session = await auth();
-  return sessionToAuthSession(session);
+  return resolveSessionFromHeaders(request.headers);
 }
 
 export function handleApiError(error: unknown): Response {
+  const paymentsResponse = handlePaymentsError(error);
+  if (paymentsResponse) return paymentsResponse;
+
   if (error instanceof AuthError) {
     return Response.json({ error: error.message }, { status: error.status });
   }

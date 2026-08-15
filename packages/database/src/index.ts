@@ -13,8 +13,11 @@ import { getMediaAssetModel } from './models/media-asset';
 import { getMetaObjectEntryModel } from './models/meta-object-entry';
 import { getMenuModel } from './models/menu';
 import { getPageModel } from './models/page';
+import { getPaymentModel } from './models/payment';
+import { getPaymentEventModel } from './models/payment-event';
 import { getPlatformSettingsModel } from './models/platform-settings';
 import { getRoleModel } from './models/role';
+import { getSubscriptionIntentModel } from './models/subscription-intent';
 import { getSystemEntityDefinitionModel } from './models/system-entity-definition';
 import { getSystemEntityRecordModel } from './models/system-entity-record';
 import { getTemplateCustomizationModel } from './models/template-customization';
@@ -65,6 +68,9 @@ export function getModels() {
     Theme: getThemeModel(mongoose),
     ThemeFile: getThemeFileModel(mongoose),
     TemplateCustomization: getTemplateCustomizationModel(mongoose),
+    Payment: getPaymentModel(mongoose),
+    PaymentEvent: getPaymentEventModel(mongoose),
+    SubscriptionIntent: getSubscriptionIntentModel(mongoose),
   };
 }
 
@@ -92,3 +98,6 @@ export * from './models/menu';
 export * from './models/theme';
 export * from './models/theme-file';
 export * from './models/template-customization';
+export * from './models/payment';
+export * from './models/payment-event';
+export * from './models/subscription-intent';

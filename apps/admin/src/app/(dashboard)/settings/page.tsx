@@ -10,6 +10,11 @@ const settingsLinks = [
     title: 'Integrations',
     description: 'Configure Cloudflare R2 media storage',
   },
+  {
+    href: '/settings/payments',
+    title: 'Payments',
+    description: 'Connect Stripe, Razorpay, or another payment gateway',
+  },
 ];
 
 export default function SettingsPage() {
