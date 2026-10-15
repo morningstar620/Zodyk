@@ -117,4 +117,4 @@ See [doc.md](./doc.md) for the full product requirements and architecture vision
 
 ## License
 
-TBD — open-source permissive license planned.
+MIT
