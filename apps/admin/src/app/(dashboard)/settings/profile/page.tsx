@@ -1,7 +1,14 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@zodyk/shared-ui';
-import { useSession } from 'next-auth/react';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@zodyk/shared-ui';
+import { signIn, useSession } from 'next-auth/react';
 import { ProfileSkeleton } from '@/components/skeletons';
 
 export default function ProfilePage() {
@@ -39,6 +46,31 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Linked sign-in</CardTitle>
+          <CardDescription>
+            Connect Google or GitHub while you are signed in. The provider email must be verified
+            and match {session?.user?.email}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => signIn('google', { callbackUrl: '/settings/profile' })}
+          >
+            Link Google
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => signIn('github', { callbackUrl: '/settings/profile' })}
+          >
+            Link GitHub
+          </Button>
         </CardContent>
       </Card>
     </div>

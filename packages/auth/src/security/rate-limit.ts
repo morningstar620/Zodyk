@@ -36,3 +36,7 @@ export async function checkRateLimit(key: string): Promise<RateLimitResult> {
 export function getRateLimitKey(action: string, identifier: string): string {
   return `${action}:${identifier}`;
 }
+
+export function clearRateLimits(): void {
+  memoryStore.clear();
+}
