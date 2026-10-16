@@ -67,7 +67,7 @@ export default function IntegrationsSettingsPage() {
         body.secretAccessKey = secretAccessKey;
       }
       const res = await fetch('/api/v1/settings/media', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
