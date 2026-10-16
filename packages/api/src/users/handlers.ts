@@ -6,12 +6,37 @@ import {
 } from '@zodyk/core';
 import {
   AuthError,
+  canAssignRoles,
   hashPassword,
   logAuditEvent,
   requirePermission,
   type AuthSession,
 } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
+
+async function assertCanAssignRoles(session: AuthSession, roleIds: string[]) {
+  const { User, Role } = getModels();
+  const targetRoles = await Role.find({
+    _id: { $in: roleIds },
+    tenantId: DEFAULT_TENANT_ID,
+  }).lean();
+  const actor = await User.findById(session.userId).lean();
+  const actorRoles = actor
+    ? await Role.find({
+        _id: { $in: actor.roleIds },
+        tenantId: DEFAULT_TENANT_ID,
+      }).lean()
+    : [];
+
+  if (
+    !canAssignRoles(
+      actorRoles.map((role) => role.slug),
+      targetRoles.map((role) => ({ slug: role.slug, permissions: role.permissions })),
+    )
+  ) {
+    throw new AuthError('Only a super admin can assign the super admin role', 403);
+  }
+}
 
 export async function listUsers(
   session: AuthSession | null,
@@ -57,10 +82,12 @@ export async function listUsers(
       email: u.email,
       status: u.status,
       roleIds: u.roleIds.map((id) => id.toString()),
-      roles: u.roleIds.map((id) => {
-        const role = roleMap.get(id.toString());
-        return role ? { id: role._id.toString(), name: role.name, slug: role.slug } : null;
-      }).filter(Boolean),
+      roles: u.roleIds
+        .map((id) => {
+          const role = roleMap.get(id.toString());
+          return role ? { id: role._id.toString(), name: role.name, slug: role.slug } : null;
+        })
+        .filter(Boolean),
       mfaEnabled: u.mfaEnabled,
       lastLoginAt: u.lastLoginAt,
       createdAt: u.createdAt,
@@ -98,11 +125,7 @@ export async function getUser(session: AuthSession | null, id: string) {
   };
 }
 
-export async function createUser(
-  session: AuthSession | null,
-  body: unknown,
-  ip?: string,
-) {
+export async function createUser(session: AuthSession | null, body: unknown, ip?: string) {
   requirePermission(session, 'users:create');
   const input = createUserSchema.parse(body);
 
@@ -110,6 +133,7 @@ export async function createUser(
   if (!uri) throw new Error('MONGODB_URI is required');
   await connectDatabase(uri);
   const { User } = getModels();
+  await assertCanAssignRoles(session!, input.roleIds);
 
   const existing = await User.findOne({
     email: input.email.toLowerCase(),
@@ -177,6 +201,8 @@ export async function updateUser(
     user.email = input.email.toLowerCase();
   }
 
+  if (input.roleIds) await assertCanAssignRoles(session!, input.roleIds);
+
   if (input.name) user.name = input.name;
   if (input.status) user.status = input.status;
   if (input.roleIds) user.roleIds = input.roleIds as unknown as typeof user.roleIds;
@@ -232,11 +258,7 @@ export async function deleteUser(session: AuthSession | null, id: string, ip?: s
   return { success: true };
 }
 
-export async function adminResetPassword(
-  session: AuthSession | null,
-  id: string,
-  ip?: string,
-) {
+export async function adminResetPassword(session: AuthSession | null, id: string, ip?: string) {
   requirePermission(session, 'users:update');
   const { requestPasswordReset } = await import('@zodyk/auth');
 

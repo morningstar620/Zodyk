@@ -76,6 +76,9 @@ export async function findOrCreateUserByEmail(email: string, name?: string) {
   let user = await User.findOne({ email: email.toLowerCase(), tenantId: DEFAULT_TENANT_ID });
 
   if (!user) {
+    if (process.env.ALLOW_REGISTRATION !== 'true') {
+      throw new Error('Registration is disabled');
+    }
     const viewerRole = await Role.findOne({ slug: 'viewer', tenantId: DEFAULT_TENANT_ID });
     user = await User.create({
       email: email.toLowerCase(),
