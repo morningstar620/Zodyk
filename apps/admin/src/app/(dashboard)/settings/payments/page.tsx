@@ -100,7 +100,7 @@ export default function PaymentsSettingsPage() {
         }
       }
       const res = await fetch('/api/v1/settings/payments', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           activeGateway,

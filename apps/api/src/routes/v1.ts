@@ -130,6 +130,16 @@ function requireParam(params: Record<string, string>, key: string): string {
   return value;
 }
 
+const SETTINGS_ALLOW = 'GET, PATCH';
+
+/** Settings updates are partial, so only PATCH is accepted. */
+function settingsMethodNotAllowed(): Response {
+  return Response.json(
+    { error: 'Method Not Allowed', allow: ['GET', 'PATCH'] },
+    { status: 405, headers: { Allow: SETTINGS_ALLOW } },
+  );
+}
+
 /** Handlers that include Server-Timing wrap the payload in `{ result, serverTiming }`. */
 function jsonFromHandler(raw: unknown): Response {
   if (raw && typeof raw === 'object' && 'result' in raw) {
@@ -751,6 +761,8 @@ export function createV1Router(): Router {
     }
   });
 
+  mount(router, 'put', '/settings/media', async () => settingsMethodNotAllowed());
+
   mount(router, 'get', '/settings/payments', async (request) => {
     try {
       const session = await getApiSession(request);
@@ -771,6 +783,8 @@ export function createV1Router(): Router {
       return handleApiError(error);
     }
   });
+
+  mount(router, 'put', '/settings/payments', async () => settingsMethodNotAllowed());
 
   // —— Storage ——
   mount(router, 'get', '/storage/health', async (request) => {
