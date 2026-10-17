@@ -16,7 +16,7 @@ npx create-zodyk my-site
 2. Runs an interactive setup wizard:
    - **Required:** MongoDB URI, admin email, admin password.
    - **Optional:** Redis, Cloudflare R2 (media/theme storage), SMTP email.
-3. Generates a `.env` with freshly generated `AUTH_SECRET` and `ENCRYPTION_KEY`.
+3. Generates a `.env` with freshly generated `AUTH_SECRET`, `ENCRYPTION_KEY`, and `REVALIDATE_SECRET`.
 4. Installs dependencies with your package manager (pnpm by default).
 5. Optionally starts MongoDB + Redis (`--start-docker`) and seeds the database (`--seed`).
 6. Prints your admin URL and login summary.

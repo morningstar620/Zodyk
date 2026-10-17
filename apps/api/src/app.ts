@@ -7,10 +7,17 @@ import helmet from 'helmet';
 import mongoose from 'mongoose';
 import type { NextFunction, Request, Response } from 'express';
 import { env } from './config';
+import { isCorsOriginAllowed } from './cors';
 import { createV1Router } from './routes/v1';
 
 export function createApp() {
   const app = express();
+
+  if (process.env.NODE_ENV === 'production' && env.corsOrigins.length === 0) {
+    console.warn(
+      '[api] CORS_ORIGINS is empty — browser origins are rejected until it is set',
+    );
+  }
 
   // Behind Traefik/nginx/cloud LB — needed for correct req.ip / protocol.
   app.set('trust proxy', 1);
@@ -25,12 +32,15 @@ export function createApp() {
   app.use(
     cors({
       origin(origin, callback) {
-        // Allow non-browser clients (no Origin) and configured admin/website origins.
-        if (!origin || env.corsOrigins.length === 0 || env.corsOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(null, false);
+        // No Origin: non-browser clients. Empty allow-list is open only outside production.
+        callback(
+          null,
+          isCorsOriginAllowed({
+            origin,
+            allowedOrigins: env.corsOrigins,
+            nodeEnv: process.env.NODE_ENV,
+          }),
+        );
       },
       credentials: true,
     }),

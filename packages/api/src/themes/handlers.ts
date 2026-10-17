@@ -50,6 +50,7 @@ import {
   invalidateWorkspaceMetadataCache,
   warmWorkspaceMetadataCache,
 } from './language-workspace';
+import { invalidateWebsiteCache } from '../website-cache';
 
 const themeIdSchema = z.object({ themeId: z.string().min(1) });
 
@@ -331,15 +332,6 @@ export async function activateThemeHandler(session: AuthSession | null, body: un
   const input = themeIdSchema.parse(body);
   await activateTheme(input.themeId, DEFAULT_TENANT_ID);
   return { success: true };
-}
-
-async function invalidateWebsiteCache() {
-  const websiteUrl = process.env.WEBSITE_URL ?? 'http://localhost:3001';
-  try {
-    await fetch(`${websiteUrl}/api/revalidate`, { method: 'POST' });
-  } catch {
-    /* website may be offline during admin save */
-  }
 }
 
 export async function publishThemeHandler(session: AuthSession | null, body: unknown) {
