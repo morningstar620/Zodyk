@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
+    "test": "node --import tsx --test src/*.test.ts",
     "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {

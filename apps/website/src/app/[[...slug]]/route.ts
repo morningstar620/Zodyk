@@ -1,3 +1,5 @@
+import { hasAdminSession } from '@/lib/admin-session';
+import { resolveStorefrontAccess } from '@/lib/design-preview';
 import { renderSitePage } from '@/lib/render';
 import { formatServerTiming } from '@/lib/request-timing';
 import { cookies } from 'next/headers';
@@ -17,18 +19,21 @@ export async function GET(
   const { slug } = await params;
   const pathname = slug?.length ? `/${slug.join('/')}` : '/';
   const url = new URL(request.url);
-  const previewThemeId = url.searchParams.get('preview_theme') ?? undefined;
-  const previewToken = url.searchParams.get('preview_token') ?? undefined;
-  const designMode = url.searchParams.get('preview') === '1';
-
+  const previewParam = url.searchParams.get('preview');
   const cookieStore = await cookies();
-  const hasPreviewCookie = Boolean(
-    cookieStore.get('zodyk_preview_theme')?.value &&
-      cookieStore.get('zodyk_preview_token')?.value,
-  );
-  const isPreview = Boolean(
-    designMode || (previewThemeId && previewToken) || hasPreviewCookie,
-  );
+  const access = resolveStorefrontAccess({
+    previewParam,
+    previewSignature: url.searchParams.get('preview_sig'),
+    previewThemeId: url.searchParams.get('preview_theme'),
+    previewToken: url.searchParams.get('preview_token'),
+    cookieTheme: cookieStore.get('zodyk_preview_theme')?.value ?? null,
+    cookieToken: cookieStore.get('zodyk_preview_token')?.value ?? null,
+    adminSession: previewParam === '1' ? await hasAdminSession(request.headers) : false,
+    signingSecret: process.env.AUTH_SECRET,
+  });
+  const { designMode, isPreview } = access;
+  const previewThemeId = access.previewThemeId;
+  const previewToken = access.previewToken;
 
   try {
     const { html, status, timings } = await renderSitePage(pathname, {
