@@ -6,9 +6,46 @@ import {
   slugToHandle,
   updatePageSchema,
 } from '@zodyk/core';
-import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
+import {
+  AuthError,
+  hasPermission,
+  logAuditEvent,
+  requireAuth,
+  requirePermission,
+  type AuthSession,
+} from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
 import { invalidateCatalogCache } from '../themes/catalog-cache';
+
+const PUBLISHING_PAGE_STATUSES = new Set(['published', 'scheduled']);
+
+function isPageOwner(createdBy: unknown, userId: string): boolean {
+  if (createdBy == null) return false;
+  return String(createdBy) === userId;
+}
+
+/** Publishing uses `pages:update`, the same gate as the dedicated publish endpoint. */
+function assertCanPublishPage(session: AuthSession, status: string | undefined) {
+  if (!status || !PUBLISHING_PAGE_STATUSES.has(status)) return;
+  if (!hasPermission(session, 'pages:update')) {
+    throw new AuthError('Insufficient permissions', 403);
+  }
+}
+
+function assertCanUpdatePage(
+  session: AuthSession,
+  page: { createdBy?: unknown; status: string },
+) {
+  if (hasPermission(session, 'pages:update')) return;
+  if (
+    hasPermission(session, 'pages:update:own') &&
+    page.status === 'draft' &&
+    isPageOwner(page.createdBy, session.userId)
+  ) {
+    return;
+  }
+  throw new AuthError('Insufficient permissions', 403);
+}
 
 function serializePage(item: {
   _id: { toString(): string };
@@ -22,6 +59,7 @@ function serializePage(item: {
   status: string;
   publishedAt?: Date;
   scheduledAt?: Date;
+  createdBy?: { toString(): string } | string;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -37,6 +75,7 @@ function serializePage(item: {
     status: item.status,
     publishedAt: item.publishedAt,
     scheduledAt: item.scheduledAt,
+    createdBy: item.createdBy != null ? String(item.createdBy) : undefined,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -93,8 +132,9 @@ export async function getPage(session: AuthSession | null, id: string) {
 }
 
 export async function createPage(session: AuthSession | null, body: unknown, ip?: string) {
-  requirePermission(session, 'pages:create');
+  const authSession = requirePermission(session, 'pages:create');
   const input = createPageSchema.parse(body);
+  assertCanPublishPage(authSession, input.status);
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
@@ -114,11 +154,13 @@ export async function createPage(session: AuthSession | null, body: unknown, ip?
     seo: input.seo ?? {},
     status: input.status,
     scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
+    createdBy: authSession.userId,
+    updatedBy: authSession.userId,
     tenantId: DEFAULT_TENANT_ID,
   });
 
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'page.create',
     resource: 'pages',
     resourceId: item._id.toString(),
@@ -137,8 +179,15 @@ export async function updatePage(
   body: unknown,
   ip?: string,
 ) {
-  requirePermission(session, 'pages:update');
+  const authSession = requireAuth(session);
+  if (
+    !hasPermission(authSession, 'pages:update') &&
+    !hasPermission(authSession, 'pages:update:own')
+  ) {
+    throw new AuthError('Insufficient permissions', 403);
+  }
   const input = updatePageSchema.parse(body);
+  assertCanPublishPage(authSession, input.status);
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
@@ -147,6 +196,7 @@ export async function updatePage(
 
   const item = await Page.findOne({ _id: id, tenantId: DEFAULT_TENANT_ID });
   if (!item) throw new AuthError('Page not found', 404);
+  assertCanUpdatePage(authSession, item);
 
   if (input.slug && input.slug !== item.slug) {
     const existing = await Page.findOne({ slug: input.slug, tenantId: DEFAULT_TENANT_ID });
@@ -164,11 +214,12 @@ export async function updatePage(
   if (input.scheduledAt !== undefined) {
     item.scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : undefined;
   }
+  item.updatedBy = authSession.userId as unknown as typeof item.updatedBy;
 
   await item.save();
 
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'page.update',
     resource: 'pages',
     resourceId: id,
