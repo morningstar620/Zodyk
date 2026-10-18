@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { SidebarGitCard } from './sidebar-git-card';
 import { SidebarHeader } from './sidebar-header';
 import { SidebarNav } from './sidebar-nav';
@@ -12,7 +13,9 @@ export function AppSidebar() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2">
-        <SidebarNav />
+        <Suspense fallback={null}>
+          <SidebarNav />
+        </Suspense>
       </div>
 
       <div className="shrink-0 border-t border-sidebar-border p-4">

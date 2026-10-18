@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { PageEditorForm } from '@/components/pages/page-editor-form';
 import { savePage } from '@/components/pages/page-api';
-import type { PageRecord } from '@/components/pages/page-types';
+import type { PageOption, PageRecord } from '@/components/pages/page-types';
 import { TableSkeleton } from '@/components/skeletons';
 
 export default function EditPagePage() {
@@ -14,6 +14,7 @@ export default function EditPagePage() {
   const [page, setPage] = useState<PageRecord | null>(null);
   const [templates, setTemplates] = useState<string[]>([]);
   const [pageIds, setPageIds] = useState<string[]>([]);
+  const [pageOptions, setPageOptions] = useState<PageOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,12 +23,14 @@ export default function EditPagePage() {
     Promise.all([
       fetch(`/api/v1/pages/${pageId}`).then((r) => r.json()),
       fetch('/api/v1/themes/templates').then((r) => r.json()),
-      fetch('/api/v1/pages?limit=100').then((r) => r.json()),
+      fetch('/api/v1/pages/options').then((r) => r.json()),
     ])
       .then(([pageData, templateData, listData]) => {
+        const options = (listData.data ?? []) as PageOption[];
         setPage(pageData);
         setTemplates(templateData.pageTemplates ?? []);
-        setPageIds((listData.data ?? []).map((p: { id: string }) => p.id));
+        setPageOptions(options);
+        setPageIds(options.map((p) => p.id));
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -47,6 +50,7 @@ export default function EditPagePage() {
       initialPage={page}
       templates={templates}
       pageIds={pageIds}
+      pageOptions={pageOptions}
       onSave={async (form) => {
         const result = await savePage(pageId, form);
         const updated = result as PageRecord;
@@ -61,6 +65,21 @@ export default function EditPagePage() {
         }
         router.push('/pages');
       }}
+      onArchive={async () => {
+        const archived = page.status === 'archived';
+        const res = await fetch(`/api/v1/pages/${pageId}/${archived ? 'unarchive' : 'archive'}`, {
+          method: 'POST',
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed to update archive state');
+        setPage(data as PageRecord);
+      }}
+      onRevisionRestored={async () => {
+        const res = await fetch(`/api/v1/pages/${pageId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? 'Failed to reload page');
+        setPage(data as PageRecord);
+      }}
       onDuplicate={async () => {
         const res = await fetch('/api/v1/pages', {
           method: 'POST',
@@ -71,6 +90,7 @@ export default function EditPagePage() {
             templateSuffix: page.templateSuffix,
             body: page.body,
             seo: page.seo,
+            parentId: page.parentId,
             status: 'draft',
           }),
         });

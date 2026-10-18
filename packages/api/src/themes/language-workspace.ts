@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
+import { DEFAULT_TENANT_ID, publicPathsById } from '@zodyk/core';
 import { connectDatabase, getModels, getSystemEntityRepository } from '@zodyk/database';
 import {
   getThemeHealth,
@@ -38,12 +38,25 @@ async function loadTenantCatalog(tenantId: string): Promise<TenantCatalog> {
   const { Page, MetaObjectDefinition, Menu } = getModels();
   const systemRepo = getSystemEntityRepository();
 
-  const [pages, metaObjects, menus, systemEntities] = await Promise.all([
-    Page.find({ tenantId, status: 'published' }).lean(),
+  const [pageDocs, metaObjects, menus, systemEntities] = await Promise.all([
+    Page.find({ tenantId }).select('title slug parentId templateSuffix status').lean(),
     MetaObjectDefinition.find({ tenantId, status: 'active' }).lean(),
     Menu.find({ tenantId }).lean(),
     systemRepo.listDefinitions(tenantId),
   ]);
+  const pagePaths = publicPathsById(
+    pageDocs.map((page) => ({
+      id: page._id.toString(),
+      slug: page.slug,
+      parentId: page.parentId ? page.parentId.toString() : null,
+    })),
+  );
+  const pages = pageDocs
+    .filter((page) => page.status === 'published')
+    .map((page) => ({
+      ...page,
+      pathname: pagePaths.get(page._id.toString()) ?? `/${page.slug}`,
+    }));
 
   const catalog = { pages, metaObjects, menus, systemEntities } as TenantCatalog;
   setCachedCatalog(tenantId, catalog);
@@ -117,16 +130,18 @@ function assembleWorkspaceData(
       templatePath: page.templateSuffix
         ? `templates/page.${page.templateSuffix}.json`
         : 'templates/page.json',
-      pathname: `/${page.slug}`,
+      pathname: page.pathname ?? `/${page.slug}`,
       group: 'Pages',
     })),
   ];
 
-  const routes = [...pageItems.map((p) => ({
-    pathname: p.pathname,
-    templatePath: p.templatePath,
-    viewType: p.id === 'home' ? 'home' : p.id === '404' ? 'not_found' : 'page',
-  }))];
+  const routes = [
+    ...pageItems.map((p) => ({
+      pathname: p.pathname,
+      templatePath: p.templatePath,
+      viewType: p.id === 'home' ? 'home' : p.id === '404' ? 'not_found' : 'page',
+    })),
+  ];
 
   for (const mo of catalog.metaObjects) {
     const key = mo.templates?.templateKey ?? mo.slug;
@@ -185,7 +200,13 @@ function assembleWorkspaceData(
         type: f.type,
         localized: f.localized,
       })),
-      relationships: ((entity.relationships ?? []) as Array<{ key: string; targetSlug: string; cardinality: string }>).map((r) => ({
+      relationships: (
+        (entity.relationships ?? []) as Array<{
+          key: string;
+          targetSlug: string;
+          cardinality: string;
+        }>
+      ).map((r) => ({
         name: r.key,
         targetSlug: r.targetSlug,
         type: r.cardinality,
@@ -335,7 +356,10 @@ export async function buildThemeLanguageWorkspace(
 export async function buildThemeLanguageHealth(
   themeId: string,
   tenantId = DEFAULT_TENANT_ID,
-): Promise<{ healthIssues: ThemeWorkspaceMetadata['healthIssues']; timings: Record<string, number> }> {
+): Promise<{
+  healthIssues: ThemeWorkspaceMetadata['healthIssues'];
+  timings: Record<string, number>;
+}> {
   const timings = createRequestTimings();
   const totalStart = performance.now();
 
@@ -362,10 +386,7 @@ export async function buildThemeLanguageHealth(
   };
 }
 
-export function warmWorkspaceMetadataCache(
-  themeId: string,
-  tenantId = DEFAULT_TENANT_ID,
-): void {
+export function warmWorkspaceMetadataCache(themeId: string, tenantId = DEFAULT_TENANT_ID): void {
   void buildThemeLanguageWorkspaceMetadata(themeId, tenantId).catch(() => undefined);
 }
 

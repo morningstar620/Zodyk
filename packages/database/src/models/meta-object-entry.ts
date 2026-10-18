@@ -45,6 +45,7 @@ const metaObjectEntrySchema = new Schema<IMetaObjectEntry>(
 );
 
 metaObjectEntrySchema.index({ tenantId: 1, metaObjectSlug: 1, handle: 1 }, { unique: true });
+metaObjectEntrySchema.index({ tenantId: 1, status: 1, scheduledAt: 1 });
 metaObjectEntrySchema.index({ tenantId: 1, metaObjectSlug: 1, status: 1, createdAt: -1 });
 metaObjectEntrySchema.index({ tenantId: 1, metaObjectSlug: 1, status: 1, publishedAt: -1 });
 metaObjectEntrySchema.index({ tenantId: 1, metaObjectSlug: 1, deletedAt: 1 });

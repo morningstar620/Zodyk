@@ -1,8 +1,10 @@
 'use client';
 
-import { Alert, Button, Card, CardContent, Input, Label } from '@zodyk/shared-ui';
+import { Alert, Button, Card, CardContent, Input, Label, Select } from '@zodyk/shared-ui';
+import { collectDescendantIds, pagePublicPath, resolvePagePublication } from '@zodyk/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RichTextEditor } from '@/components/content/RichTextEditor';
+import { RevisionHistory } from '@/components/revisions/revision-history';
 import { PageEditorHeader } from './page-editor-header';
 import { PageSeoCard } from './page-seo-card';
 import { PageTemplateCard } from './page-template-card';
@@ -12,6 +14,7 @@ import {
   pageToFormData,
   slugFromTitle,
   type PageFormData,
+  type PageOption,
   type PageRecord,
 } from './page-types';
 import { PageVisibilityCard } from './page-visibility-card';
@@ -24,9 +27,12 @@ type PageEditorFormProps = {
   initialPage?: PageRecord;
   templates: string[];
   pageIds?: string[];
+  pageOptions?: PageOption[];
   onSave: (data: PageFormData) => Promise<PageRecord | void>;
   onDelete?: () => Promise<void>;
   onDuplicate?: () => Promise<void>;
+  onArchive?: () => Promise<void>;
+  onRevisionRestored?: () => Promise<void>;
 };
 
 export function PageEditorForm({
@@ -34,9 +40,12 @@ export function PageEditorForm({
   initialPage,
   templates,
   pageIds = [],
+  pageOptions = [],
   onSave,
   onDelete,
   onDuplicate,
+  onArchive,
+  onRevisionRestored,
 }: PageEditorFormProps) {
   const [form, setForm] = useState<PageFormData>(
     initialPage ? pageToFormData(initialPage) : defaultPageFormData(),
@@ -47,6 +56,7 @@ export function PageEditorForm({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slugTouched, setSlugTouched] = useState(mode === 'edit');
 
@@ -59,7 +69,10 @@ export function PageEditorForm({
     }
   }, [initialPage]);
 
-  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(savedForm), [form, savedForm]);
+  const isDirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(savedForm),
+    [form, savedForm],
+  );
 
   const updateForm = useCallback((patch: Partial<PageFormData>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -83,9 +96,39 @@ export function PageEditorForm({
   const nextPageId =
     currentIndex >= 0 && currentIndex < pageIds.length - 1 ? pageIds[currentIndex + 1] : undefined;
 
+  const blockedParentIds = useMemo(() => {
+    if (!initialPage) return new Set<string>();
+    return collectDescendantIds(pageOptions, initialPage.id);
+  }, [initialPage, pageOptions]);
+
+  const parentChoices = pageOptions.filter(
+    (option) => option.id !== initialPage?.id && !blockedParentIds.has(option.id),
+  );
+
+  const savedPublication = resolvePagePublication({
+    visible: savedForm.visible,
+    publishedAt: savedForm.publishedAt,
+    archived: !savedForm.visible && savedForm.status === 'archived',
+  });
+  const viewPath = pagePublicPath(
+    {
+      id: initialPage?.id ?? 'draft',
+      slug: form.slug || 'page',
+      parentId: form.parentId,
+    },
+    pageOptions,
+  );
+  const savedPath = pagePublicPath(
+    {
+      id: initialPage?.id ?? 'draft',
+      slug: savedForm.slug || initialPage?.slug || '',
+      parentId: savedForm.parentId,
+    },
+    pageOptions,
+  );
   const viewUrl =
-    initialPage && form.visible
-      ? `${SITE_URL.replace(/\/$/, '')}/${form.slug || initialPage.slug}`
+    initialPage && savedPublication.status === 'published' && savedPath !== '/'
+      ? `${SITE_URL.replace(/\/$/, '')}${savedPath}`
       : undefined;
 
   async function handleSave() {
@@ -123,6 +166,24 @@ export function PageEditorForm({
     }
   }
 
+  async function handleArchive() {
+    if (!onArchive) return;
+    const archived = form.status === 'archived';
+    const message = archived
+      ? 'Move this page back to drafts?'
+      : 'Archive this page? It stays in the admin and is removed from the public site.';
+    if (!window.confirm(message)) return;
+    setArchiving(true);
+    setError(null);
+    try {
+      await onArchive();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to archive');
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   async function handleDuplicate() {
     if (!onDuplicate) return;
     setDuplicating(true);
@@ -146,8 +207,11 @@ export function PageEditorForm({
         viewUrl={viewUrl}
         onDuplicate={mode === 'edit' ? handleDuplicate : undefined}
         onDelete={mode === 'edit' ? handleDelete : undefined}
+        onArchive={mode === 'edit' ? handleArchive : undefined}
+        archived={form.status === 'archived'}
         duplicating={duplicating}
         deleting={deleting}
+        archiving={archiving}
       />
 
       {error && <Alert variant="destructive">{error}</Alert>}
@@ -205,6 +269,28 @@ export function PageEditorForm({
 
           <Card>
             <CardContent className="pt-6">
+              <Label htmlFor="page-parent">Parent page</Label>
+              <Select
+                id="page-parent"
+                value={form.parentId ?? ''}
+                onChange={(event) => updateForm({ parentId: event.target.value || null })}
+                className="mt-1.5"
+              >
+                <option value="">No parent</option>
+                {parentChoices.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.title} ({option.path})
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {form.slug ? `Public URL ${viewPath}` : 'The public URL includes each parent slug.'}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
               <Label htmlFor="url-handle">URL handle</Label>
               <Input
                 id="url-handle"
@@ -220,6 +306,14 @@ export function PageEditorForm({
           </Card>
         </div>
       </div>
+
+      {mode === 'edit' && initialPage && (
+        <RevisionHistory
+          listUrl={`/api/v1/pages/${initialPage.id}/revisions`}
+          refreshKey={initialPage.updatedAt}
+          onRestored={onRevisionRestored}
+        />
+      )}
 
       <div className="fixed bottom-6 right-6 z-40">
         <Button

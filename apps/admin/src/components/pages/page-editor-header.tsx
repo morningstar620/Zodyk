@@ -2,6 +2,7 @@
 
 import { Button, cn } from '@zodyk/shared-ui';
 import {
+  Archive,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -22,8 +23,11 @@ type PageEditorHeaderProps = {
   viewUrl?: string;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  onArchive?: () => void;
+  archived?: boolean;
   duplicating?: boolean;
   deleting?: boolean;
+  archiving?: boolean;
 };
 
 export function PageEditorHeader({
@@ -35,8 +39,11 @@ export function PageEditorHeader({
   viewUrl,
   onDuplicate,
   onDelete,
+  onArchive,
+  archived,
   duplicating,
   deleting,
+  archiving,
 }: PageEditorHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -70,7 +77,9 @@ export function PageEditorHeader({
             className="mb-1"
           />
           {mode === 'edit' && (
-            <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+            <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+              {title}
+            </h1>
           )}
         </div>
       </div>
@@ -110,10 +119,26 @@ export function PageEditorHeader({
               className="bg-card"
             >
               More actions
-              <ChevronDown className={cn('h-4 w-4 transition-transform', menuOpen && 'rotate-180')} />
+              <ChevronDown
+                className={cn('h-4 w-4 transition-transform', menuOpen && 'rotate-180')}
+              />
             </Button>
             {menuOpen && (
               <div className="absolute top-full right-0 z-50 mt-1 min-w-[11rem] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">
+                {onArchive && (
+                  <button
+                    type="button"
+                    disabled={archiving}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onArchive();
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                  >
+                    <Archive className="h-4 w-4" />
+                    {archived ? 'Unarchive' : 'Archive page'}
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={deleting}

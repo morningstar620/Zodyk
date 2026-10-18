@@ -26,7 +26,11 @@ export function LoginForm({ magicLinkEnabled }: { magicLinkEnabled: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') ?? '/';
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('error') === 'AccessDenied'
+      ? 'Sign-in was denied. New accounts are only created when registration is open, and an existing account can be linked only while you are signed in with a verified matching email.'
+      : null,
+  );
   const [magicLinkPending, setMagicLinkPending] = useState(false);
 
   const {

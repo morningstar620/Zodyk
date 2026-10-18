@@ -1,4 +1,3 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { ViewType } from '@zodyk/core';
 
 export interface RoutePage {
@@ -6,6 +5,7 @@ export interface RoutePage {
   title: string;
   slug: string;
   handle: string;
+  parentId?: { toString(): string } | string | null;
   templateSuffix?: string;
   body?: string;
   status: string;
@@ -51,7 +51,10 @@ export interface ResolvedRoute {
 }
 
 function splitPath(path: string): string[] {
-  return path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  return path
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
 }
 
 function matchPattern(pattern: string, segments: string[]): Record<string, string> | null {
@@ -110,7 +113,10 @@ async function resolveRouteInternal(
 
     if (routing.archiveEnabled) {
       const archiveSegments = splitPath(archivePath);
-      if (segments.length === archiveSegments.length && segments.join('/') === archiveSegments.join('/')) {
+      if (
+        segments.length === archiveSegments.length &&
+        segments.join('/') === archiveSegments.join('/')
+      ) {
         const page = 1;
         const pageSize = def.display?.archivePageSize ?? 12;
         const result = await options.findMetaEntries(def.slug, {
@@ -151,10 +157,32 @@ async function resolveRouteInternal(
   return { view: 'not_found', slugSegments: segments };
 }
 
-function findPageByPath(pages: RoutePage[], segments: string[]): RoutePage | undefined {
+function parentKey(page: RoutePage): string | null {
+  const parent = page.parentId;
+  if (!parent) return null;
+  const value = typeof parent === 'string' ? parent : parent.toString();
+  return value || null;
+}
+
+/**
+ * Match every segment to a published page whose parent is the previous segment.
+ * `/about/team` matches only when `team.parentId` is the about page.
+ */
+export function findPageByPath(pages: RoutePage[], segments: string[]): RoutePage | undefined {
   if (segments.length === 0) return undefined;
-  const targetSlug = segments[segments.length - 1]!;
-  return pages.find((p) => p.slug === targetSlug && p.status === 'published');
+  let parentId: string | null = null;
+  let match: RoutePage | undefined;
+
+  for (const segment of segments) {
+    match = pages.find(
+      (page) =>
+        page.slug === segment && page.status === 'published' && parentKey(page) === parentId,
+    );
+    if (!match) return undefined;
+    parentId = match._id.toString();
+  }
+
+  return match;
 }
 
 export function metaObjectToLiquid(
@@ -224,10 +252,7 @@ function isPathActive(itemUrl: string, currentPath: string): boolean {
   return current === item || current.startsWith(`${item}/`);
 }
 
-function menuItemToLiquid(
-  item: RouteMenuItem,
-  currentPath: string,
-): Record<string, unknown> {
+function menuItemToLiquid(item: RouteMenuItem, currentPath: string): Record<string, unknown> {
   const childLinks = (item.items ?? []).map((child) => menuItemToLiquid(child, currentPath));
   const active = isPathActive(item.url, currentPath);
   const childActive = childLinks.some(
