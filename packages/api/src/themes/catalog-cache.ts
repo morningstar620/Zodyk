@@ -7,7 +7,9 @@ export interface TenantCatalog {
     _id: { toString(): string };
     title: string;
     slug: string;
+    parentId?: { toString(): string } | string | null;
     templateSuffix?: string;
+    pathname?: string;
   }>;
   metaObjects: Array<{
     slug: string;

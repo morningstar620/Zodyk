@@ -8,6 +8,7 @@ import {
   getVerificationTokenModel,
 } from './models/auth';
 import { getAuditLogModel } from './models/audit-log';
+import { getContentRevisionModel } from './models/content-revision';
 import { getMetaObjectDefinitionModel } from './models/meta-object-definition';
 import { getMediaAssetModel } from './models/media-asset';
 import { getMetaObjectEntryModel } from './models/meta-object-entry';
@@ -52,6 +53,7 @@ export function getModels() {
     Role: getRoleModel(mongoose),
     ApiToken: getApiTokenModel(mongoose),
     AuditLog: getAuditLogModel(mongoose),
+    ContentRevision: getContentRevisionModel(mongoose),
     Account: getAccountModel(mongoose),
     Session: getSessionModel(mongoose),
     VerificationToken: getVerificationTokenModel(mongoose),
@@ -81,10 +83,13 @@ export async function ensureIndexes(): Promise<void> {
 
 export { mongoose };
 export * from './repositories';
+export * from './revisions';
+export * from './scheduling';
 export * from './models/user';
 export * from './models/role';
 export * from './models/api-token';
 export * from './models/audit-log';
+export * from './models/content-revision';
 export * from './models/account';
 export * from './models/auth';
 export * from './models/meta-object-definition';
