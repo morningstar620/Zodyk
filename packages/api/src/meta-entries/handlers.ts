@@ -11,7 +11,13 @@ import {
   validateEntryData,
   type MetaEntrySnapshot,
 } from '@zodyk/core';
-import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
+import {
+  AuthError,
+  hasPermission,
+  logAuditEvent,
+  requirePermission,
+  type AuthSession,
+} from '@zodyk/auth';
 import {
   connectDatabase,
   findContentRevision,
@@ -54,6 +60,15 @@ async function rememberEntry(
       scheduledAt: cleared.scheduledAt ? null : item.scheduledAt,
     }),
   });
+}
+
+const PUBLISHING_ENTRY_STATUSES = new Set(['published', 'scheduled']);
+
+function assertCanPublishMetaEntry(session: AuthSession, status: string | undefined) {
+  if (!status || !PUBLISHING_ENTRY_STATUSES.has(status)) return;
+  if (!hasPermission(session, 'meta_entries:publish')) {
+    throw new AuthError('Insufficient permissions', 403);
+  }
 }
 
 async function getDefinitionOrThrow(slug: string) {
@@ -198,8 +213,9 @@ export async function createMetaEntry(
   body: unknown,
   ip?: string,
 ) {
-  requirePermission(session, 'meta_entries:create');
+  const authSession = requirePermission(session, 'meta_entries:create');
   const input = createMetaEntrySchema.parse(body);
+  assertCanPublishMetaEntry(authSession, input.status);
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
@@ -241,8 +257,8 @@ export async function createMetaEntry(
     translations: input.translations ?? {},
     publishedAt: publication.publishedAt ? new Date(publication.publishedAt) : undefined,
     scheduledAt: publication.scheduledAt ? new Date(publication.scheduledAt) : undefined,
-    createdBy: session?.userId,
-    updatedBy: session?.userId,
+    createdBy: authSession.userId,
+    updatedBy: authSession.userId,
     tenantId: DEFAULT_TENANT_ID,
   });
 
@@ -250,7 +266,7 @@ export async function createMetaEntry(
   await invalidateWebsiteCache();
 
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'meta_entry.create',
     resource: 'meta_entries',
     resourceId: item._id.toString(),
@@ -278,8 +294,9 @@ export async function updateMetaEntry(
   body: unknown,
   ip?: string,
 ) {
-  requirePermission(session, 'meta_entries:update');
+  const authSession = requirePermission(session, 'meta_entries:update');
   const input = updateMetaEntrySchema.parse(body);
+  assertCanPublishMetaEntry(authSession, input.status);
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
@@ -327,7 +344,7 @@ export async function updateMetaEntry(
   if (input.scheduledAt !== undefined) {
     item.scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : undefined;
   }
-  item.updatedBy = session?.userId as unknown as typeof item.updatedBy;
+  item.updatedBy = authSession.userId as unknown as typeof item.updatedBy;
 
   await item.save();
   if (input.scheduledAt === null) {
@@ -337,7 +354,7 @@ export async function updateMetaEntry(
   await invalidateWebsiteCache();
 
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'meta_entry.update',
     resource: 'meta_entries',
     resourceId: id,

@@ -7,7 +7,7 @@ import {
   templateJsonSchema,
   z,
 } from '@zodyk/core';
-import { AuthError, requirePermission, type AuthSession } from '@zodyk/auth';
+import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
 import {
   activateTheme,
@@ -72,6 +72,24 @@ const uploadThemeSchema = z.object({
   slug: z.string().min(1).optional(),
   version: z.string().optional(),
 });
+
+async function auditThemeChange(
+  session: AuthSession,
+  action: string,
+  resourceId?: string,
+  metadata?: Record<string, unknown>,
+  ip?: string,
+) {
+  await logAuditEvent({
+    actorId: session.userId,
+    action,
+    resource: 'themes',
+    resourceId,
+    metadata,
+    ip,
+    tenantId: DEFAULT_TENANT_ID,
+  });
+}
 
 async function maybeInvalidateLiveTheme(isLive: boolean) {
   if (isLive) {
@@ -316,18 +334,28 @@ export async function getActiveThemeHandler(session: AuthSession | null) {
   };
 }
 
-export async function activateThemeHandler(session: AuthSession | null, body: unknown) {
-  requirePermission(session, 'themes:activate');
+export async function activateThemeHandler(
+  session: AuthSession | null,
+  body: unknown,
+  ip?: string,
+) {
+  const authSession = requirePermission(session, 'themes:activate');
   const input = themeIdSchema.parse(body);
   await activateTheme(input.themeId, DEFAULT_TENANT_ID);
+  await auditThemeChange(authSession, 'theme.activate', input.themeId, undefined, ip);
   return { success: true };
 }
 
-export async function publishThemeHandler(session: AuthSession | null, body: unknown) {
-  requirePermission(session, 'themes:publish');
+export async function publishThemeHandler(
+  session: AuthSession | null,
+  body: unknown,
+  ip?: string,
+) {
+  const authSession = requirePermission(session, 'themes:publish');
   const input = themeIdSchema.parse(body);
   await publishTheme(input.themeId, DEFAULT_TENANT_ID);
   await invalidateWebsiteCache();
+  await auditThemeChange(authSession, 'theme.publish', input.themeId, undefined, ip);
   return { success: true };
 }
 
@@ -383,8 +411,12 @@ export async function scaffoldTemplateHandler(session: AuthSession | null, body:
   return { success: true };
 }
 
-export async function installDefaultThemeHandler(session: AuthSession | null, dir: string) {
-  requirePermission(session, 'themes:install');
+export async function installDefaultThemeHandler(
+  session: AuthSession | null,
+  dir: string,
+  ip?: string,
+) {
+  const authSession = requirePermission(session, 'themes:install');
   const result = await installThemeFromDirectory(dir, {
     name: 'Zodyk Starter',
     slug: 'zodyk-starter',
@@ -392,6 +424,13 @@ export async function installDefaultThemeHandler(session: AuthSession | null, di
     activate: true,
     tenantId: DEFAULT_TENANT_ID,
   });
+  await auditThemeChange(
+    authSession,
+    'theme.install',
+    result.themeId,
+    { slug: 'zodyk-starter', source: 'directory' },
+    ip,
+  );
   return result;
 }
 
@@ -422,13 +461,15 @@ export async function putThemeFileHandler(
   session: AuthSession | null,
   themeId: string,
   body: unknown,
+  ip?: string,
 ) {
-  requirePermission(session, 'themes:update');
+  const authSession = requirePermission(session, 'themes:update');
   const input = fileWriteSchema.parse(body);
   const result = await upsertThemeFile(themeId, input.path, input.content, DEFAULT_TENANT_ID);
   await maybeInvalidateLiveTheme(result.isLive);
   invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  await auditThemeChange(authSession, 'theme.file.update', themeId, { path: input.path }, ip);
   return { success: true };
 }
 
@@ -436,8 +477,9 @@ export async function createThemeFileHandler(
   session: AuthSession | null,
   themeId: string,
   body: unknown,
+  ip?: string,
 ) {
-  requirePermission(session, 'themes:update');
+  const authSession = requirePermission(session, 'themes:update');
   const input = fileWriteSchema.parse(body);
   const existing = await getThemeFile(themeId, input.path, DEFAULT_TENANT_ID);
   if (existing) throw new AuthError('File already exists', 409);
@@ -445,6 +487,7 @@ export async function createThemeFileHandler(
   await maybeInvalidateLiveTheme(result.isLive);
   invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  await auditThemeChange(authSession, 'theme.file.create', themeId, { path: input.path }, ip);
   return { success: true };
 }
 
@@ -452,17 +495,23 @@ export async function deleteThemeFileHandler(
   session: AuthSession | null,
   themeId: string,
   path: string,
+  ip?: string,
 ) {
-  requirePermission(session, 'themes:update');
+  const authSession = requirePermission(session, 'themes:update');
   const result = await deleteThemeFile(themeId, path, DEFAULT_TENANT_ID);
   await maybeInvalidateLiveTheme(result.isLive);
   invalidateWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
   warmWorkspaceMetadataCache(themeId, DEFAULT_TENANT_ID);
+  await auditThemeChange(authSession, 'theme.file.delete', themeId, { path }, ip);
   return { success: true };
 }
 
-export async function uploadThemeHandler(session: AuthSession | null, formData: FormData) {
-  requirePermission(session, 'themes:install');
+export async function uploadThemeHandler(
+  session: AuthSession | null,
+  formData: FormData,
+  ip?: string,
+) {
+  const authSession = requirePermission(session, 'themes:install');
   const file = formData.get('file');
   if (!(file instanceof File)) {
     throw new AuthError('Theme zip file is required', 400);
@@ -491,6 +540,7 @@ export async function uploadThemeHandler(session: AuthSession | null, formData: 
     tenantId: DEFAULT_TENANT_ID,
   });
 
+  await auditThemeChange(authSession, 'theme.install', result.themeId, { slug, source: 'zip' }, ip);
   return result;
 }
 
@@ -733,8 +783,12 @@ export async function renderThemeSectionHandler(
   };
 }
 
-export async function updateThemeSettings(session: AuthSession | null, body: unknown) {
-  requirePermission(session, 'themes:update');
+export async function updateThemeSettings(
+  session: AuthSession | null,
+  body: unknown,
+  ip?: string,
+) {
+  const authSession = requirePermission(session, 'themes:update');
   const values = z.record(z.unknown()).parse(body);
   const theme = await loadActiveTheme(DEFAULT_TENANT_ID);
   if (!theme) throw new AuthError('No active theme', 404);
@@ -744,6 +798,7 @@ export async function updateThemeSettings(session: AuthSession | null, body: unk
     DEFAULT_TENANT_ID,
   );
   await maybeInvalidateLiveTheme(isLive);
+  await auditThemeChange(authSession, 'theme.settings.update', theme.id, undefined, ip);
   return { success: true, settings };
 }
 
@@ -751,8 +806,9 @@ export async function updateThemeSettingsById(
   session: AuthSession | null,
   themeId: string,
   body: unknown,
+  ip?: string,
 ) {
-  requirePermission(session, 'themes:update');
+  const authSession = requirePermission(session, 'themes:update');
   const values = z.record(z.unknown()).parse(body);
   const { settings, isLive } = await updateThemeSettingsForTheme(
     themeId,
@@ -760,6 +816,7 @@ export async function updateThemeSettingsById(
     DEFAULT_TENANT_ID,
   );
   await maybeInvalidateLiveTheme(isLive);
+  await auditThemeChange(authSession, 'theme.settings.update', themeId, undefined, ip);
   return { success: true, settings };
 }
 

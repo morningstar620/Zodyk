@@ -1228,7 +1228,7 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(await activateThemeHandler(session, body));
+      return Response.json(await activateThemeHandler(session, body, getClientIp(request)));
     } catch (error) {
       return handleApiError(error);
     }
@@ -1238,7 +1238,7 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(await publishThemeHandler(session, body));
+      return Response.json(await publishThemeHandler(session, body, getClientIp(request)));
     } catch (error) {
       return handleApiError(error);
     }
@@ -1268,7 +1268,9 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const formData = await request.formData();
-      return Response.json(await uploadThemeHandler(session, formData), { status: 201 });
+      return Response.json(await uploadThemeHandler(session, formData, getClientIp(request)), {
+        status: 201,
+      });
     } catch (error) {
       return handleApiError(error);
     }
@@ -1278,7 +1280,7 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(await updateThemeSettings(session, body));
+      return Response.json(await updateThemeSettings(session, body, getClientIp(request)));
     } catch (error) {
       return handleApiError(error);
     }
@@ -1350,7 +1352,9 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(await putThemeFileHandler(session, requireParam(params, 'id'), body));
+      return Response.json(
+        await putThemeFileHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
+      );
     } catch (error) {
       return handleApiError(error);
     }
@@ -1361,10 +1365,13 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await createThemeFileHandler(session, requireParam(params, 'id'), body),
-        {
-          status: 201,
-        },
+        await createThemeFileHandler(
+          session,
+          requireParam(params, 'id'),
+          body,
+          getClientIp(request),
+        ),
+        { status: 201 },
       );
     } catch (error) {
       return handleApiError(error);
@@ -1376,7 +1383,14 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const path = new URL(request.url).searchParams.get('path');
       if (!path) return Response.json({ error: 'path query required' }, { status: 400 });
-      return Response.json(await deleteThemeFileHandler(session, requireParam(params, 'id'), path));
+      return Response.json(
+        await deleteThemeFileHandler(
+          session,
+          requireParam(params, 'id'),
+          path,
+          getClientIp(request),
+        ),
+      );
     } catch (error) {
       return handleApiError(error);
     }
@@ -1468,7 +1482,12 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await updateThemeSettingsById(session, requireParam(params, 'id'), body),
+        await updateThemeSettingsById(
+          session,
+          requireParam(params, 'id'),
+          body,
+          getClientIp(request),
+        ),
       );
     } catch (error) {
       return handleApiError(error);
