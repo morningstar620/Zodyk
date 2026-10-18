@@ -5,11 +5,11 @@ export interface RoutePage {
   title: string;
   slug: string;
   handle: string;
+  parentId?: { toString(): string } | string | null;
   templateSuffix?: string;
   body?: string;
   status: string;
   seo?: Record<string, unknown>;
-  parentId?: { toString(): string } | string | null;
   updatedAt?: Date;
 }
 
@@ -160,10 +160,32 @@ async function resolveRouteInternal(
   return { view: 'not_found', slugSegments: segments };
 }
 
-function findPageByPath(pages: RoutePage[], segments: string[]): RoutePage | undefined {
+function parentKey(page: RoutePage): string | null {
+  const parent = page.parentId;
+  if (!parent) return null;
+  const value = typeof parent === 'string' ? parent : parent.toString();
+  return value || null;
+}
+
+/**
+ * Match every segment to a published page whose parent is the previous segment.
+ * `/about/team` matches only when `team.parentId` is the about page.
+ */
+export function findPageByPath(pages: RoutePage[], segments: string[]): RoutePage | undefined {
   if (segments.length === 0) return undefined;
-  const targetSlug = segments[segments.length - 1]!;
-  return pages.find((p) => p.slug === targetSlug && p.status === 'published');
+  let parentId: string | null = null;
+  let match: RoutePage | undefined;
+
+  for (const segment of segments) {
+    match = pages.find(
+      (page) =>
+        page.slug === segment && page.status === 'published' && parentKey(page) === parentId,
+    );
+    if (!match) return undefined;
+    parentId = match._id.toString();
+  }
+
+  return match;
 }
 
 export function metaObjectToLiquid(

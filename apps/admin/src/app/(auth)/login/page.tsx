@@ -28,7 +28,11 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') ?? '/';
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('error') === 'AccessDenied'
+      ? 'Sign-in was denied. New accounts are only created when registration is open, and an existing account can be linked only while you are signed in with a verified matching email.'
+      : null,
+  );
 
   const {
     register,
@@ -78,7 +82,12 @@ function LoginForm() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              {...register('password')}
+            />
             {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
           </div>
           <Button type="submit" disabled={isSubmitting}>

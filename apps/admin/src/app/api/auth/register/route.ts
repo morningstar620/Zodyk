@@ -1,4 +1,6 @@
 import {
+  AuthError,
+  assertResetPasswordRateLimit,
   checkRateLimit,
   getRateLimitKey,
   registerUser,
@@ -38,12 +40,18 @@ export async function POST(request: Request) {
 
     if (action === 'reset-password') {
       const input = resetPasswordSchema.parse(body);
+      const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+      const ip = forwarded || request.headers.get('x-real-ip')?.trim() || 'unknown';
+      await assertResetPasswordRateLimit(ip, input.token);
       await resetPassword(input.token, input.password);
       return Response.json({ success: true });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'Request failed';
     return Response.json({ error: message }, { status: 400 });
   }

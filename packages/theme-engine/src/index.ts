@@ -1,8 +1,4 @@
-export {
-  readThemeDirectory,
-  checksum,
-  filesToMap,
-} from './install';
+export { readThemeDirectory, checksum, filesToMap } from './install';
 
 export {
   renderThemedPage,
@@ -78,6 +74,7 @@ export {
 
 export {
   resolveRoute,
+  findPageByPath,
   metaObjectToLiquid,
   pageToLiquid,
   menuToLiquid,
