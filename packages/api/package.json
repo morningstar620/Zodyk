@@ -24,7 +24,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run && node --import tsx --test src/website-cache.test.ts"
   },
   "dependencies": {
     "@zodyk/auth": "workspace:*",

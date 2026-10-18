@@ -345,7 +345,7 @@ async function main(): Promise<void> {
   const envSpinner = p.spinner();
   envSpinner.start('Generating .env and encryption keys');
   await writeEnvFile(projectDir, values);
-  envSpinner.stop('Wrote .env with generated AUTH_SECRET and ENCRYPTION_KEY.');
+  envSpinner.stop('Wrote .env with generated AUTH_SECRET, ENCRYPTION_KEY, and REVALIDATE_SECRET.');
 
   if (opts.install) {
     const hasPm = await commandExists(pm);

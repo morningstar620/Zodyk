@@ -48,6 +48,8 @@ cp .env.example .env
 
 Edit `.env` as needed for local development.
 
+In production, set `REVALIDATE_SECRET` (same value on the website and the API) and `CORS_ORIGINS` (admin and website origins). An empty CORS allow-list rejects browser origins, and cache flush rejects requests that do not send `Authorization: Bearer $REVALIDATE_SECRET`. See [infrastructure/deployment/README.md](./infrastructure/deployment/README.md).
+
 **Theme storage:** By default in development, themes use the local filesystem (`THEME_STORAGE=local`, files under `themes/{slug}`). Customizer and code-editor saves write directly to those files. In production, set `THEME_STORAGE=r2` (and configure R2) so theme edits are stored in Cloudflare R2. Media library storage stays independent of theme storage.
 
 ### 4. Run development servers
