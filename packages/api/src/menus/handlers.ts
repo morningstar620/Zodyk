@@ -2,12 +2,14 @@ import {
   createMenuSchema,
   DEFAULT_TENANT_ID,
   paginationSchema,
+  publicPathsById,
   titleToHandle,
   updateMenuSchema,
   type MenuItemInput,
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
+import { loadPagePathNodes } from '../pages/paths';
 import { invalidateCatalogCache } from '../themes/catalog-cache';
 
 export interface LinkTargetOption {
@@ -319,19 +321,18 @@ export async function searchLinkTargets(
       const pages = await Page.find({
         tenantId: DEFAULT_TENANT_ID,
         status: 'published',
-        $or: [
-          { title: { $regex: q, $options: 'i' } },
-          { slug: { $regex: q, $options: 'i' } },
-        ],
+        $or: [{ title: { $regex: q, $options: 'i' } }, { slug: { $regex: q, $options: 'i' } }],
       })
         .limit(20)
         .lean();
 
+      const nodes = await loadPagePathNodes();
+      const paths = publicPathsById(nodes);
       for (const page of pages) {
         results.push({
           id: `page:${page._id.toString()}`,
           label: page.title,
-          url: `/${page.slug}`,
+          url: paths.get(page._id.toString()) ?? `/${page.slug}`,
           type: 'page',
           resourceId: page._id.toString(),
           resourceHandle: page.handle,
@@ -383,10 +384,12 @@ export async function searchLinkTargets(
     }
 
     const pages = await Page.find(filter).sort({ title: 1 }).limit(50).lean();
+    const nodes = await loadPagePathNodes();
+    const paths = publicPathsById(nodes);
     const results: LinkTargetOption[] = pages.map((page) => ({
       id: `page:${page._id.toString()}`,
       label: page.title,
-      url: `/${page.slug}`,
+      url: paths.get(page._id.toString()) ?? `/${page.slug}`,
       type: 'page',
       resourceId: page._id.toString(),
       resourceHandle: page.handle,

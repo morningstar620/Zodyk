@@ -24,6 +24,8 @@ interface PageDoc {
   createdAt: Date;
   updatedAt: Date;
   save: () => Promise<PageDoc>;
+  set: (path: string, value: unknown) => void;
+  toObject: () => PageDoc;
 }
 
 interface EntryDoc {
@@ -41,6 +43,7 @@ interface EntryDoc {
   updatedBy?: string;
   tenantId: string;
   save: () => Promise<EntryDoc>;
+  set: (path: string, value: unknown) => void;
 }
 
 interface AuditDoc {
@@ -123,6 +126,10 @@ const harness = vi.hoisted(() => {
           _id: makeId('page'),
         } as PageDoc;
         page.save = async () => page;
+        page.set = (path: string, value: unknown) => {
+          (page as unknown as Record<string, unknown>)[path] = value;
+        };
+        page.toObject = () => ({ ...page });
         pages.push(page);
         return page;
       },
@@ -132,6 +139,19 @@ const harness = vi.hoisted(() => {
         const [removed] = pages.splice(index, 1);
         return removed ?? null;
       },
+      find: (filter: Record<string, unknown>) => {
+        const rows = pages.filter((page) => matches(page, filter));
+        const api = {
+          select: () => api,
+          sort: () => api,
+          skip: () => api,
+          limit: () => api,
+          lean: async () => rows,
+        };
+        return api;
+      },
+      updateOne: async () => ({ acknowledged: true }),
+      countDocuments: async () => pages.length,
     },
     MetaObjectDefinition: {
       findOne: async () => ({
@@ -156,9 +176,14 @@ const harness = vi.hoisted(() => {
           _id: makeId('entry'),
         } as EntryDoc;
         entry.save = async () => entry;
+        entry.set = (path: string, value: unknown) => {
+          (entry as unknown as Record<string, unknown>)[path] = value;
+        };
         entries.push(entry);
         return entry;
       },
+      updateOne: async () => ({ acknowledged: true }),
+      find: () => query(entries),
     },
     AuditLog: {
       create: async (doc: Omit<AuditDoc, '_id' | 'createdAt'>) => {
@@ -206,6 +231,11 @@ const harness = vi.hoisted(() => {
       getModels: () => models,
       getSystemEntityRepository: () => ({}),
       mongoose: {},
+      promoteDueScheduledContent: async () => ({ pages: [], entries: [] }),
+      recordContentRevision: async () => undefined,
+      findContentRevision: async () => null,
+      listContentRevisionDocs: async () => [],
+      deleteContentRevisions: async () => undefined,
     },
     themeEngineModule: new Proxy(themeFns, {
       get(target, prop) {

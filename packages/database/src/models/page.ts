@@ -58,6 +58,7 @@ pageSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 pageSchema.index({ tenantId: 1, handle: 1 });
 pageSchema.index({ tenantId: 1, status: 1 });
 pageSchema.index({ tenantId: 1, parentId: 1 });
+pageSchema.index({ tenantId: 1, status: 1, scheduledAt: 1 });
 
 export type PageModel = Model<IPage>;
 

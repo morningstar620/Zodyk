@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { MetaEntryForm } from '@/components/content/MetaEntryForm';
+import { RevisionHistory } from '@/components/revisions/revision-history';
 import { entryLabel } from '@/components/meta-objects/entries-table';
 import { EntrySidebar } from '@/components/meta-objects/entry-sidebar';
 import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
@@ -78,7 +79,9 @@ export default function EditMetaEntryPage() {
     setSaving(true);
     setError(null);
     await save();
-    const res = await fetch(`/api/v1/meta-objects/${slug}/entries/${id}/publish`, { method: 'POST' });
+    const res = await fetch(`/api/v1/meta-objects/${slug}/entries/${id}/publish`, {
+      method: 'POST',
+    });
     if (!res.ok) {
       const json = await res.json();
       setError(json.error ?? 'Failed to publish');
@@ -140,12 +143,28 @@ export default function EditMetaEntryPage() {
             metaObjects={metaObjects}
           />
         </div>
-        <EntrySidebar
-          status={status}
-          handle={handle}
-          createdAt={createdAt}
-          updatedAt={updatedAt}
-        />
+        <div className="flex flex-col gap-6">
+          <EntrySidebar
+            status={status}
+            handle={handle}
+            createdAt={createdAt}
+            updatedAt={updatedAt}
+          />
+          <RevisionHistory
+            listUrl={`/api/v1/meta-objects/${slug}/entries/${id}/revisions`}
+            refreshKey={updatedAt}
+            onRestored={async () => {
+              const entry = await fetch(`/api/v1/meta-objects/${slug}/entries/${id}`).then((r) =>
+                r.json(),
+              );
+              setData(entry.data ?? {});
+              setTranslations(entry.translations ?? {});
+              setStatus(entry.status ?? 'draft');
+              setHandle(entry.handle);
+              setUpdatedAt(entry.updatedAt);
+            }}
+          />
+        </div>
       </div>
 
       <Link
