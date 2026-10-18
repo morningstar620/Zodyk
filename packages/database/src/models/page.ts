@@ -14,6 +14,8 @@ export interface IPage extends Document {
   status: PageStatus;
   publishedAt?: Date;
   scheduledAt?: Date;
+  createdBy?: Types.ObjectId;
+  updatedBy?: Types.ObjectId;
   tenantId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +46,8 @@ const pageSchema = new Schema<IPage>(
     },
     publishedAt: { type: Date },
     scheduledAt: { type: Date },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     tenantId: { type: String, required: true, default: DEFAULT_TENANT_ID },
   },
   { timestamps: true },

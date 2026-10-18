@@ -14,7 +14,14 @@ import {
   type PageSnapshot,
   type PageStatus,
 } from '@zodyk/core';
-import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
+import {
+  AuthError,
+  hasPermission,
+  logAuditEvent,
+  requireAuth,
+  requirePermission,
+  type AuthSession,
+} from '@zodyk/auth';
 import {
   connectDatabase,
   deleteContentRevisions,
@@ -29,6 +36,36 @@ import { presentRevisionDetail, presentRevisionList } from '../revisions/present
 import { invalidateCatalogCache } from '../themes/catalog-cache';
 import { invalidateWebsiteCache } from '../website-cache';
 import { loadPagePathNodes, publicPathFor } from './paths';
+
+const PUBLISHING_PAGE_STATUSES = new Set(['published', 'scheduled']);
+
+function isPageOwner(createdBy: unknown, userId: string): boolean {
+  if (createdBy == null) return false;
+  return String(createdBy) === userId;
+}
+
+/** Publishing uses `pages:update`, the same gate as the dedicated publish endpoint. */
+function assertCanPublishPage(session: AuthSession, status: string | undefined) {
+  if (!status || !PUBLISHING_PAGE_STATUSES.has(status)) return;
+  if (!hasPermission(session, 'pages:update')) {
+    throw new AuthError('Insufficient permissions', 403);
+  }
+}
+
+function assertCanUpdatePage(
+  session: AuthSession,
+  page: { createdBy?: unknown; status: string },
+) {
+  if (hasPermission(session, 'pages:update')) return;
+  if (
+    hasPermission(session, 'pages:update:own') &&
+    page.status === 'draft' &&
+    isPageOwner(page.createdBy, session.userId)
+  ) {
+    return;
+  }
+  throw new AuthError('Insufficient permissions', 403);
+}
 
 type PageLike = {
   _id: { toString(): string };
@@ -47,6 +84,7 @@ type PageLike = {
   status: string;
   publishedAt?: Date | null;
   scheduledAt?: Date | null;
+  createdBy?: { toString(): string } | string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -65,6 +103,7 @@ function serializePage(item: PageLike, path?: string) {
     status: item.status,
     publishedAt: item.publishedAt ?? undefined,
     scheduledAt: item.scheduledAt ?? undefined,
+    createdBy: item.createdBy != null ? String(item.createdBy) : undefined,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -216,8 +255,9 @@ export async function getPage(session: AuthSession | null, id: string) {
 }
 
 export async function createPage(session: AuthSession | null, body: unknown, ip?: string) {
-  requirePermission(session, 'pages:create');
+  const authSession = requirePermission(session, 'pages:create');
   const input = createPageSchema.parse(body);
+  assertCanPublishPage(authSession, input.status);
 
   await connect();
   const { Page } = getModels();
@@ -243,12 +283,14 @@ export async function createPage(session: AuthSession | null, body: unknown, ip?
     status: publication.status,
     publishedAt: publication.publishedAt ? new Date(publication.publishedAt) : undefined,
     scheduledAt: publication.scheduledAt ? new Date(publication.scheduledAt) : undefined,
+    createdBy: authSession.userId,
+    updatedBy: authSession.userId,
     tenantId: DEFAULT_TENANT_ID,
   });
 
   await rememberPage(item, session?.userId);
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'page.create',
     resource: 'pages',
     resourceId: item._id.toString(),
@@ -273,14 +315,22 @@ export async function updatePage(
   body: unknown,
   ip?: string,
 ) {
-  requirePermission(session, 'pages:update');
+  const authSession = requireAuth(session);
+  if (
+    !hasPermission(authSession, 'pages:update') &&
+    !hasPermission(authSession, 'pages:update:own')
+  ) {
+    throw new AuthError('Insufficient permissions', 403);
+  }
   const input = updatePageSchema.parse(body);
+  assertCanPublishPage(authSession, input.status);
 
   await connect();
   const { Page } = getModels();
 
   const item = await Page.findOne({ _id: id, tenantId: DEFAULT_TENANT_ID });
   if (!item) throw new AuthError('Page not found', 404);
+  assertCanUpdatePage(authSession, item);
 
   if (input.slug && input.slug !== item.slug) {
     const existing = await Page.findOne({ slug: input.slug, tenantId: DEFAULT_TENANT_ID });
@@ -324,13 +374,14 @@ export async function updatePage(
     });
     applyPublication(item, next, unset);
   }
+  item.updatedBy = authSession.userId as unknown as typeof item.updatedBy;
 
   await item.save();
   await unsetPageFields(id, unset);
   await rememberPage(item, session?.userId, unset);
 
   await logAuditEvent({
-    actorId: session!.userId,
+    actorId: authSession.userId,
     action: 'page.update',
     resource: 'pages',
     resourceId: id,
