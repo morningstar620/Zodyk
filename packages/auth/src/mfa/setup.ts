@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
+
+const BACKUP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function generateMfaSecret(): string {
   return authenticator.generateSecret();
@@ -18,11 +21,23 @@ export function verifyTotpCode(secret: string, code: string): boolean {
   return authenticator.verify({ token: code, secret });
 }
 
-export function generateBackupCodes(count = 10): string[] {
-  const codes: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const code = Math.random().toString(36).slice(2, 10).toUpperCase();
-    codes.push(code);
+function randomBackupCode(length = 8): string {
+  const alphabet = BACKUP_ALPHABET;
+  const limit = Math.floor(256 / alphabet.length) * alphabet.length;
+  const chars: string[] = [];
+  while (chars.length < length) {
+    const bytes = crypto.randomBytes(length);
+    for (const byte of bytes) {
+      if (byte < limit) {
+        const char = alphabet[byte % alphabet.length];
+        if (char) chars.push(char);
+        if (chars.length === length) break;
+      }
+    }
   }
-  return codes;
+  return chars.join('');
+}
+
+export function generateBackupCodes(count = 10): string[] {
+  return Array.from({ length: count }, () => randomBackupCode());
 }
