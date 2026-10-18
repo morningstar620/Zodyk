@@ -5,15 +5,20 @@ import type { NextConfig } from 'next';
 // Load monorepo root .env (Next.js only reads .env from apps/admin by default)
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
-function apiUpstream(): string | undefined {
+function apiUpstream(): string {
   const configured = process.env.API_UPSTREAM_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
   // After the Express split, /api/v1 lives on the API server. Default in local dev.
   if (process.env.NODE_ENV !== 'production') {
     return 'http://127.0.0.1:5002';
   }
-  return undefined;
+  throw new Error(
+    'API_UPSTREAM_URL is required when NODE_ENV is production. Set API_UPSTREAM_URL to the API origin (for example https://api.example.com) so admin /api/v1 rewrites are not dropped.',
+  );
 }
+
+// Evaluated while Next loads this file (build and start), before rewrites can be omitted.
+const apiUpstreamOrigin = apiUpstream();
 
 const nextConfig: NextConfig = {
   transpilePackages: [
@@ -68,12 +73,10 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    const upstream = apiUpstream();
-    if (!upstream) return [];
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${upstream}/api/v1/:path*`,
+        destination: `${apiUpstreamOrigin}/api/v1/:path*`,
       },
     ];
   },
