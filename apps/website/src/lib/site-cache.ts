@@ -1,5 +1,10 @@
 import { DEFAULT_TENANT_ID } from '@zodyk/core';
-import { connectDatabase, getModels } from '@zodyk/database';
+import {
+  connectDatabase,
+  findNextScheduledAt,
+  getModels,
+  promoteDueScheduledContent,
+} from '@zodyk/database';
 import { loadActiveTheme, type LoadedTheme } from '@zodyk/theme-engine';
 
 /** Rely on publish/revalidate invalidation rather than short expiry. */
@@ -21,7 +26,12 @@ interface CachedPage {
 }
 
 let siteDataCache: SiteData | null = null;
+let nextScheduledAtMs: number | null = null;
 const pageHtmlCache = new Map<string, CachedPage>();
+
+function scheduleIsDue(now = Date.now()): boolean {
+  return nextScheduledAtMs != null && now >= nextScheduledAtMs;
+}
 
 async function loadPages() {
   const { Page } = getModels();
@@ -41,9 +51,17 @@ async function loadMenus() {
 export async function getSiteData(uri: string): Promise<SiteData | null> {
   await connectDatabase(uri);
 
-  if (siteDataCache && Date.now() - siteDataCache.fetchedAt < TTL_MS) {
+  const now = Date.now();
+  if (siteDataCache && now - siteDataCache.fetchedAt < TTL_MS && !scheduleIsDue(now)) {
     return siteDataCache;
   }
+
+  const promoted = await promoteDueScheduledContent(new Date(now));
+  if (promoted.pages + promoted.entries > 0) {
+    pageHtmlCache.clear();
+  }
+  const nextScheduledAt = await findNextScheduledAt(new Date());
+  nextScheduledAtMs = nextScheduledAt ? nextScheduledAt.getTime() : null;
 
   const theme = await loadActiveTheme(DEFAULT_TENANT_ID);
   if (!theme) return null;
@@ -66,6 +84,11 @@ export async function getSiteData(uri: string): Promise<SiteData | null> {
 }
 
 export function getCachedPageHtml(pathname: string): CachedPage | null {
+  if (scheduleIsDue()) {
+    pageHtmlCache.clear();
+    siteDataCache = null;
+    return null;
+  }
   const cached = pageHtmlCache.get(pathname);
   if (!cached || Date.now() - cached.fetchedAt >= HTML_TTL_MS) {
     pageHtmlCache.delete(pathname);
@@ -81,4 +104,5 @@ export function setCachedPageHtml(pathname: string, html: string, status: number
 export function invalidateSiteCache(): void {
   siteDataCache = null;
   pageHtmlCache.clear();
+  nextScheduledAtMs = null;
 }

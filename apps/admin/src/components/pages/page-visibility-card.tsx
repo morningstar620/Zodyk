@@ -22,9 +22,25 @@ function formatPublishedAt(date?: string) {
   });
 }
 
+function toDatetimeLocalValue(iso?: string): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromDatetimeLocalValue(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
 export function PageVisibilityCard({ visible, publishedAt, onChange }: PageVisibilityCardProps) {
   const [editingDate, setEditingDate] = useState(false);
   const formattedDate = formatPublishedAt(publishedAt);
+  const scheduled = Boolean(publishedAt && new Date(publishedAt).getTime() > Date.now());
 
   return (
     <Card>
@@ -48,17 +64,17 @@ export function PageVisibilityCard({ visible, publishedAt, onChange }: PageVisib
                 {editingDate ? (
                   <input
                     type="datetime-local"
-                    value={publishedAt ? publishedAt.slice(0, 16) : ''}
-                    onChange={(e) =>
-                      onChange(true, e.target.value ? new Date(e.target.value).toISOString() : undefined)
-                    }
+                    value={toDatetimeLocalValue(publishedAt)}
+                    onChange={(e) => onChange(true, fromDatetimeLocalValue(e.target.value))}
                     onBlur={() => setEditingDate(false)}
                     className="rounded border border-input px-2 py-1 text-xs"
                     autoFocus
                   />
                 ) : (
                   <>
-                    <p className="text-xs text-muted-foreground">As of {formattedDate}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {scheduled ? 'Scheduled for' : 'As of'} {formattedDate}
+                    </p>
                     <button
                       type="button"
                       onClick={() => setEditingDate(true)}

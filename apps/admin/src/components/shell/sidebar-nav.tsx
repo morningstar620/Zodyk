@@ -3,7 +3,7 @@
 import { cn } from '@zodyk/shared-ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { prefetchApi } from '@/lib/api-fetcher';
 import { favoriteItems, navGroups, type NavItem } from './nav-config';
@@ -39,7 +39,27 @@ function NavLink({
   );
 }
 
-function NavItemWithChildren({ item, pathname }: { item: NavItem; pathname: string }) {
+function childIsActive(href: string, pathname: string, search: string): boolean {
+  const [path, query = ''] = href.split('?');
+  if (pathname !== path) return false;
+  const expected = new URLSearchParams(query);
+  const actual = new URLSearchParams(search);
+  if ([...expected.keys()].length === 0) return !actual.get('status');
+  for (const [key, value] of expected.entries()) {
+    if (actual.get(key) !== value) return false;
+  }
+  return true;
+}
+
+function NavItemWithChildren({
+  item,
+  pathname,
+  search,
+}: {
+  item: NavItem;
+  pathname: string;
+  search: string;
+}) {
   const hasChildren = item.children && item.children.length > 0;
   const isActive =
     item.href === '/'
@@ -76,7 +96,7 @@ function NavItemWithChildren({ item, pathname }: { item: NavItem; pathname: stri
       {expanded && (
         <div className="mt-0.5 flex flex-col gap-0.5">
           {item.children!.map((child) => {
-            const childActive = pathname === child.href.split('?')[0];
+            const childActive = childIsActive(child.href, pathname, search);
             return (
               <Link
                 key={child.href}
@@ -112,6 +132,8 @@ function NavSection({ label, children }: { label: string; children: React.ReactN
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
 
   return (
     <nav className="py-2">
@@ -128,7 +150,12 @@ export function SidebarNav() {
       {navGroups.map((group) => (
         <NavSection key={group.label} label={group.label}>
           {group.items.map((item) => (
-            <NavItemWithChildren key={item.href + item.label} item={item} pathname={pathname} />
+            <NavItemWithChildren
+              key={item.href + item.label}
+              item={item}
+              pathname={pathname}
+              search={search}
+            />
           ))}
         </NavSection>
       ))}
