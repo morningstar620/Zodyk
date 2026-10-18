@@ -16,6 +16,7 @@ import {
   deleteMenu,
   deleteMetaEntry,
   deleteMetaObject,
+  archivePage,
   deletePage,
   deleteRole,
   deleteSystemEntity,
@@ -31,8 +32,10 @@ import {
   getCustomizerBootstrapHandler,
   getMenu,
   getMetaEntry,
+  getMetaEntryRevision,
   getMetaObject,
   getPage,
+  getPageRevision,
   getRole,
   getStorageHealthHandler,
   getSystemEntity,
@@ -54,7 +57,10 @@ import {
   listAuditLogs,
   listMenus,
   listMetaEntries,
+  listMetaEntryRevisions,
   listMetaObjects,
+  listPageOptions,
+  listPageRevisions,
   listPages,
   listRoles,
   listSystemEntities,
@@ -66,6 +72,8 @@ import {
   previewThemeHandler,
   publishMetaEntry,
   publishPage,
+  restoreMetaEntryRevision,
+  restorePageRevision,
   publishThemeHandler,
   putThemeCustomizationHandler,
   putThemeFileHandler,
@@ -77,6 +85,7 @@ import {
   updateMenu,
   updateMetaEntry,
   updateMetaObject,
+  unarchivePage,
   updatePage,
   updateRole,
   updateSystemEntity,
@@ -128,6 +137,16 @@ function requireParam(params: Record<string, string>, key: string): string {
     throw Object.assign(new Error(`${key} is required`), { status: 400 });
   }
   return value;
+}
+
+const SETTINGS_ALLOW = 'GET, PATCH';
+
+/** Settings updates are partial, so only PATCH is accepted. */
+function settingsMethodNotAllowed(): Response {
+  return Response.json(
+    { error: 'Method Not Allowed', allow: ['GET', 'PATCH'] },
+    { status: 405, headers: { Allow: SETTINGS_ALLOW } },
+  );
 }
 
 /** Handlers that include Server-Timing wrap the payload in `{ result, serverTiming }`. */
@@ -333,6 +352,15 @@ export function createV1Router(): Router {
     }
   });
 
+  mount(router, 'get', '/pages/options', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listPageOptions(session));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
   mount(router, 'get', '/pages/:id', async (request, params) => {
     try {
       const session = await getApiSession(request);
@@ -371,6 +399,68 @@ export function createV1Router(): Router {
       const body = await request.json().catch(() => ({}));
       return Response.json(
         await publishPage(session, requireParam(params, 'id'), body, getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/pages/:id/archive', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await archivePage(session, requireParam(params, 'id'), getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/pages/:id/unarchive', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await unarchivePage(session, requireParam(params, 'id'), getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/pages/:id/revisions', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listPageRevisions(session, requireParam(params, 'id')));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/pages/:id/revisions/:revisionId', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await getPageRevision(
+          session,
+          requireParam(params, 'id'),
+          requireParam(params, 'revisionId'),
+        ),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/pages/:id/revisions/:revisionId/restore', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await restorePageRevision(
+          session,
+          requireParam(params, 'id'),
+          requireParam(params, 'revisionId'),
+          getClientIp(request),
+        ),
       );
     } catch (error) {
       return handleApiError(error);
@@ -563,6 +653,64 @@ export function createV1Router(): Router {
     }
   });
 
+  mount(router, 'get', '/meta-objects/:slug/entries/:id/revisions', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await listMetaEntryRevisions(
+          session,
+          requireParam(params, 'slug'),
+          requireParam(params, 'id'),
+        ),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(
+    router,
+    'get',
+    '/meta-objects/:slug/entries/:id/revisions/:revisionId',
+    async (request, params) => {
+      try {
+        const session = await getApiSession(request);
+        return Response.json(
+          await getMetaEntryRevision(
+            session,
+            requireParam(params, 'slug'),
+            requireParam(params, 'id'),
+            requireParam(params, 'revisionId'),
+          ),
+        );
+      } catch (error) {
+        return handleApiError(error);
+      }
+    },
+  );
+
+  mount(
+    router,
+    'post',
+    '/meta-objects/:slug/entries/:id/revisions/:revisionId/restore',
+    async (request, params) => {
+      try {
+        const session = await getApiSession(request);
+        return Response.json(
+          await restoreMetaEntryRevision(
+            session,
+            requireParam(params, 'slug'),
+            requireParam(params, 'id'),
+            requireParam(params, 'revisionId'),
+            getClientIp(request),
+          ),
+        );
+      } catch (error) {
+        return handleApiError(error);
+      }
+    },
+  );
+
   mount(router, 'post', '/meta-objects/:slug/entries/:id/publish', async (request, params) => {
     try {
       const session = await getApiSession(request);
@@ -617,12 +765,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await updateSystemEntity(
-          session,
-          requireParam(params, 'slug'),
-          body,
-          getClientIp(request),
-        ),
+        await updateSystemEntity(session, requireParam(params, 'slug'), body, getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);
@@ -656,12 +799,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await createSystemRecord(
-          session,
-          requireParam(params, 'slug'),
-          body,
-          getClientIp(request),
-        ),
+        await createSystemRecord(session, requireParam(params, 'slug'), body, getClientIp(request)),
         { status: 201 },
       );
     } catch (error) {
@@ -751,6 +889,8 @@ export function createV1Router(): Router {
     }
   });
 
+  mount(router, 'put', '/settings/media', async () => settingsMethodNotAllowed());
+
   mount(router, 'get', '/settings/payments', async (request) => {
     try {
       const session = await getApiSession(request);
@@ -771,6 +911,8 @@ export function createV1Router(): Router {
       return handleApiError(error);
     }
   });
+
+  mount(router, 'put', '/settings/payments', async () => settingsMethodNotAllowed());
 
   // —— Storage ——
   mount(router, 'get', '/storage/health', async (request) => {
@@ -818,12 +960,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json().catch(() => ({}));
       return Response.json(
-        await refundPaymentHandler(
-          session,
-          requireParam(params, 'id'),
-          body,
-          getClientIp(request),
-        ),
+        await refundPaymentHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);
@@ -834,10 +971,9 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(
-        await createSubscriptionHandler(session, body, getClientIp(request)),
-        { status: 201 },
-      );
+      return Response.json(await createSubscriptionHandler(session, body, getClientIp(request)), {
+        status: 201,
+      });
     } catch (error) {
       return handleApiError(error);
     }
@@ -847,11 +983,7 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       return Response.json(
-        await cancelSubscriptionHandler(
-          session,
-          requireParam(params, 'id'),
-          getClientIp(request),
-        ),
+        await cancelSubscriptionHandler(session, requireParam(params, 'id'), getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);
@@ -1016,12 +1148,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await transformMediaAsset(
-          session,
-          requireParam(params, 'id'),
-          body,
-          getClientIp(request),
-        ),
+        await transformMediaAsset(session, requireParam(params, 'id'), body, getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);
@@ -1033,12 +1160,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const body = await request.json();
       return Response.json(
-        await saveMediaAssetAsNew(
-          session,
-          requireParam(params, 'id'),
-          body,
-          getClientIp(request),
-        ),
+        await saveMediaAssetAsNew(session, requireParam(params, 'id'), body, getClientIp(request)),
         { status: 201 },
       );
     } catch (error) {
@@ -1238,9 +1360,12 @@ export function createV1Router(): Router {
     try {
       const session = await getApiSession(request);
       const body = await request.json();
-      return Response.json(await createThemeFileHandler(session, requireParam(params, 'id'), body), {
-        status: 201,
-      });
+      return Response.json(
+        await createThemeFileHandler(session, requireParam(params, 'id'), body),
+        {
+          status: 201,
+        },
+      );
     } catch (error) {
       return handleApiError(error);
     }
@@ -1251,9 +1376,7 @@ export function createV1Router(): Router {
       const session = await getApiSession(request);
       const path = new URL(request.url).searchParams.get('path');
       if (!path) return Response.json({ error: 'path query required' }, { status: 400 });
-      return Response.json(
-        await deleteThemeFileHandler(session, requireParam(params, 'id'), path),
-      );
+      return Response.json(await deleteThemeFileHandler(session, requireParam(params, 'id'), path));
     } catch (error) {
       return handleApiError(error);
     }
@@ -1359,10 +1482,7 @@ export function createV1Router(): Router {
       const resourceType = searchParams.get('resourceType');
       const resourceId = searchParams.get('resourceId');
       if (!resourceType || !resourceId) {
-        return Response.json(
-          { error: 'resourceType and resourceId required' },
-          { status: 400 },
-        );
+        return Response.json({ error: 'resourceType and resourceId required' }, { status: 400 });
       }
       return Response.json(
         await getThemeCustomizationHandler(
@@ -1419,12 +1539,7 @@ export function createV1Router(): Router {
       const templatePath = requireParam(params, 'path');
       const body = await request.json();
       return Response.json(
-        await putThemeTemplateHandler(
-          session,
-          requireParam(params, 'id'),
-          templatePath,
-          body,
-        ),
+        await putThemeTemplateHandler(session, requireParam(params, 'id'), templatePath, body),
       );
     } catch (error) {
       return handleApiError(error);

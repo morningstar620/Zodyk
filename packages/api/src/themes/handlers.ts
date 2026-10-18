@@ -1,6 +1,7 @@
 import {
   DEFAULT_TENANT_ID,
   listPageTemplates,
+  publicPathsById,
   sectionInstanceSchema,
   templateCustomizationSchema,
   templateJsonSchema,
@@ -87,16 +88,10 @@ const previewSchema = z.object({
   pageTemplateSuffix: z.string().optional(),
   metaTemplateKey: z.string().optional(),
   metaEntryTemplateSuffix: z.string().optional(),
-  view: z
-    .enum(['home', 'page', 'meta_archive', 'meta_single', 'not_found'])
-    .optional(),
+  view: z.enum(['home', 'page', 'meta_archive', 'meta_single', 'not_found']).optional(),
 });
 
-function prepareCustomizerPreviewHtml(
-  html: string,
-  themeId: string,
-  previewToken: string,
-): string {
+function prepareCustomizerPreviewHtml(html: string, themeId: string, previewToken: string): string {
   const shopUrl = getShopUrl().replace(/\/$/, '');
   const assetQuery = `preview_theme=${encodeURIComponent(themeId)}&preview_token=${encodeURIComponent(previewToken)}`;
   let result = html.replace(/\/assets\/([a-zA-Z0-9._-]+)/g, `/assets/$1?${assetQuery}`);
@@ -244,10 +239,7 @@ async function buildPreviewContextUncached(
   };
 }
 
-async function buildPreviewContext(
-  pathname: string,
-  themeSettings?: Record<string, unknown>,
-) {
+async function buildPreviewContext(pathname: string, themeSettings?: Record<string, unknown>) {
   const cacheKey = pathname;
   const cached = previewContextCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < PREVIEW_CONTEXT_TTL_MS) {
@@ -283,10 +275,7 @@ export async function getThemeStorageStatusHandler(session: AuthSession | null) 
   return getThemeStorageStatus();
 }
 
-export async function getThemeR2SyncStatusHandler(
-  session: AuthSession | null,
-  themeId: string,
-) {
+export async function getThemeR2SyncStatusHandler(session: AuthSession | null, themeId: string) {
   requirePermission(session, 'themes:read');
   const status = await getThemeR2SyncStatus(themeId, DEFAULT_TENANT_ID);
   if (!status) throw new AuthError('Theme not found', 404);
@@ -361,10 +350,7 @@ export async function deleteThemeHandler(session: AuthSession | null, themeId: s
   return { success: true };
 }
 
-export async function getThemeHealthHandler(
-  session: AuthSession | null,
-  themeId?: string,
-) {
+export async function getThemeHealthHandler(session: AuthSession | null, themeId?: string) {
   requirePermission(session, 'themes:read');
   return getThemeHealth(themeId, DEFAULT_TENANT_ID);
 }
@@ -380,7 +366,9 @@ export async function scaffoldTemplateHandler(session: AuthSession | null, body:
         name: input.name,
         sections: {
           main_1: {
-            type: input.sectionType ?? (input.templatePath.includes('archive') ? 'main-archive' : 'main-single'),
+            type:
+              input.sectionType ??
+              (input.templatePath.includes('archive') ? 'main-archive' : 'main-single'),
             settings: {},
           },
         },
@@ -542,10 +530,7 @@ export async function getThemeLanguageWorkspaceMetadataHandler(
   };
 }
 
-export async function getThemeLanguageHealthHandler(
-  session: AuthSession | null,
-  themeId: string,
-) {
+export async function getThemeLanguageHealthHandler(session: AuthSession | null, themeId: string) {
   requirePermission(session, 'themes:read');
   const { healthIssues, timings } = await buildThemeLanguageHealth(themeId, DEFAULT_TENANT_ID);
   return {
@@ -753,7 +738,11 @@ export async function updateThemeSettings(session: AuthSession | null, body: unk
   const values = z.record(z.unknown()).parse(body);
   const theme = await loadActiveTheme(DEFAULT_TENANT_ID);
   if (!theme) throw new AuthError('No active theme', 404);
-  const { settings, isLive } = await updateThemeSettingsForTheme(theme.id, values, DEFAULT_TENANT_ID);
+  const { settings, isLive } = await updateThemeSettingsForTheme(
+    theme.id,
+    values,
+    DEFAULT_TENANT_ID,
+  );
   await maybeInvalidateLiveTheme(isLive);
   return { success: true, settings };
 }
@@ -765,7 +754,11 @@ export async function updateThemeSettingsById(
 ) {
   requirePermission(session, 'themes:update');
   const values = z.record(z.unknown()).parse(body);
-  const { settings, isLive } = await updateThemeSettingsForTheme(themeId, values, DEFAULT_TENANT_ID);
+  const { settings, isLive } = await updateThemeSettingsForTheme(
+    themeId,
+    values,
+    DEFAULT_TENANT_ID,
+  );
   await maybeInvalidateLiveTheme(isLive);
   return { success: true, settings };
 }
@@ -778,12 +771,23 @@ export async function listThemePagesHandler(session: AuthSession | null) {
   const { Page, MetaObjectDefinition } = getModels();
 
   const [pages, metaObjects, theme] = await Promise.all([
-    Page.find({ tenantId: DEFAULT_TENANT_ID, status: 'published' }).lean(),
+    Page.find({ tenantId: DEFAULT_TENANT_ID })
+      .select('title slug parentId templateSuffix status')
+      .lean(),
     MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' }).lean(),
     loadActiveTheme(DEFAULT_TENANT_ID),
   ]);
+  const pagePaths = publicPathsById(
+    pages.map((page) => ({
+      id: page._id.toString(),
+      slug: page.slug,
+      parentId: page.parentId ? page.parentId.toString() : null,
+    })),
+  );
 
-  const templateFiles = theme ? Object.keys(theme.files).filter((f) => f.startsWith('templates/')) : [];
+  const templateFiles = theme
+    ? Object.keys(theme.files).filter((f) => f.startsWith('templates/'))
+    : [];
 
   const items: Array<{
     id: string;
@@ -792,18 +796,31 @@ export async function listThemePagesHandler(session: AuthSession | null) {
     pathname: string;
     group: string;
   }> = [
-    { id: 'home', label: 'Home page', templatePath: 'templates/index.json', pathname: '/', group: 'Pages' },
-    { id: '404', label: '404', templatePath: 'templates/404.json', pathname: '/not-found', group: 'System' },
+    {
+      id: 'home',
+      label: 'Home page',
+      templatePath: 'templates/index.json',
+      pathname: '/',
+      group: 'Pages',
+    },
+    {
+      id: '404',
+      label: '404',
+      templatePath: 'templates/404.json',
+      pathname: '/not-found',
+      group: 'System',
+    },
   ];
 
   for (const page of pages) {
+    if (page.status !== 'published') continue;
     const suffix = page.templateSuffix;
     const templatePath = suffix ? `templates/page.${suffix}.json` : 'templates/page.json';
     items.push({
       id: page._id.toString(),
       label: page.title,
       templatePath,
-      pathname: `/${page.slug}`,
+      pathname: pagePaths.get(page._id.toString()) ?? `/${page.slug}`,
       group: 'Pages',
     });
   }

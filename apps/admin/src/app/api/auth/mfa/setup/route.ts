@@ -1,4 +1,11 @@
-import { auth, disableMfa, enableMfa, generateMfaQrCode, generateMfaSecret } from '@zodyk/auth';
+import {
+  AuthError,
+  auth,
+  disableMfa,
+  enableMfa,
+  generateMfaQrCode,
+  generateMfaSecret,
+} from '@zodyk/auth';
 import { mfaSetupSchema } from '@zodyk/core';
 
 export async function GET() {
@@ -29,12 +36,26 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'disable') {
-      await disableMfa(session.userId);
+      const code = typeof body.code === 'string' ? body.code.trim() : '';
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (!code && !password) {
+        return Response.json(
+          { error: 'A current authenticator code, backup code, or password is required' },
+          { status: 401 },
+        );
+      }
+      await disableMfa(session.userId, {
+        code: code || undefined,
+        password: password || undefined,
+      });
       return Response.json({ success: true });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'MFA operation failed';
     return Response.json({ error: message }, { status: 400 });
   }

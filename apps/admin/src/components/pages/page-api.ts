@@ -1,13 +1,23 @@
+import { resolvePagePublication } from '@zodyk/core';
 import type { PageFormData } from './page-types';
 
 export function buildPagePayload(form: PageFormData) {
+  const publication = resolvePagePublication({
+    visible: form.visible,
+    publishedAt: form.publishedAt,
+    archived: !form.visible && form.status === 'archived',
+  });
+
   return {
     title: form.title,
     slug: form.slug || undefined,
-    templateSuffix: form.templateSuffix,
+    templateSuffix: form.templateSuffix ? form.templateSuffix : null,
     body: form.body,
     seo: form.seo,
-    status: form.visible ? ('published' as const) : ('draft' as const),
+    parentId: form.parentId ? form.parentId : null,
+    status: publication.status,
+    ...(publication.publishedAt !== undefined ? { publishedAt: publication.publishedAt } : {}),
+    scheduledAt: publication.scheduledAt,
   };
 }
 
@@ -24,15 +34,10 @@ export async function savePage(
       body: JSON.stringify({
         ...payload,
         slug: form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        status: form.visible ? 'published' : 'draft',
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? 'Failed to create page');
-    if (form.visible && data.id) {
-      const pub = await fetch(`/api/v1/pages/${data.id}/publish`, { method: 'POST' });
-      if (pub.ok) return pub.json();
-    }
     return data;
   }
 
@@ -43,11 +48,5 @@ export async function savePage(
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? 'Failed to save page');
-
-  if (form.visible && data.status !== 'published') {
-    const pub = await fetch(`/api/v1/pages/${id}/publish`, { method: 'POST' });
-    if (pub.ok) return pub.json();
-  }
-
   return data;
 }

@@ -19,6 +19,8 @@ export default function MfaSettingsPage() {
   const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [disableCode, setDisableCode] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -61,15 +63,22 @@ export default function MfaSettingsPage() {
     const res = await fetch('/api/auth/mfa/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'disable' }),
+      body: JSON.stringify({
+        action: 'disable',
+        code: disableCode.trim() || undefined,
+        password: disablePassword || undefined,
+      }),
     });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
 
     if (!res.ok) {
-      setError('Failed to disable MFA');
+      setError(json.error ?? 'Failed to disable MFA');
       return;
     }
     setSuccess('MFA disabled');
     setBackupCodes(null);
+    setDisableCode('');
+    setDisablePassword('');
   }
 
   return (
@@ -97,9 +106,7 @@ export default function MfaSettingsPage() {
             </Alert>
           )}
 
-          {!qrCode && !backupCodes && (
-            <Button onClick={startSetup}>Set up MFA</Button>
-          )}
+          {!qrCode && !backupCodes && <Button onClick={startSetup}>Set up MFA</Button>}
 
           {qrCode && secret && (
             <div className="flex flex-col gap-4">
@@ -123,9 +130,38 @@ export default function MfaSettingsPage() {
             </div>
           )}
 
-          <Button variant="outline" onClick={disableMfa}>
-            Disable MFA
-          </Button>
+          <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4">
+            <p className="text-sm text-zinc-600">
+              Disabling MFA requires a current authenticator code, backup code, or password.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="disable-code">Authenticator or backup code</Label>
+              <Input
+                id="disable-code"
+                value={disableCode}
+                onChange={(e) => setDisableCode(e.target.value)}
+                autoComplete="one-time-code"
+                placeholder="Code"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="disable-password">Password</Label>
+              <Input
+                id="disable-password"
+                type="password"
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <Button
+              variant="outline"
+              onClick={disableMfa}
+              disabled={!disableCode.trim() && !disablePassword}
+            >
+              Disable MFA
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

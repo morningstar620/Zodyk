@@ -1,7 +1,9 @@
 import { connectDatabase, getModels } from '@zodyk/database';
 import crypto from 'crypto';
+import { AuthError } from '../rbac/middleware';
 import { decrypt, encrypt } from '../security/encryption';
 import { hashPassword, verifyPassword } from '../security/password';
+import { checkRateLimit, getRateLimitKey } from '../security/rate-limit';
 import { verifyTotpCode } from './setup';
 
 export async function verifyMfaCode(
@@ -65,12 +67,38 @@ export async function enableMfa(
   return { backupCodes };
 }
 
-export async function disableMfa(userId: string): Promise<void> {
+export async function disableMfa(
+  userId: string,
+  factor: { code?: string; password?: string },
+): Promise<void> {
+  const code = factor.code?.trim() ?? '';
+  const password = factor.password ?? '';
+  if (!code && !password) {
+    throw new AuthError('A current authenticator code, backup code, or password is required', 401);
+  }
+
+  const limit = await checkRateLimit(getRateLimitKey('mfa-disable', userId));
+  if (!limit.success) throw new AuthError('Too many requests', 429);
+
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
 
   await connectDatabase(uri);
   const { User } = getModels();
+  const user = await User.findById(userId);
+  if (!user?.mfaEnabled) throw new AuthError('MFA is not enabled', 400);
+
+  let verified = false;
+  if (code) {
+    const result = await verifyMfaCode(userId, code);
+    verified = result.valid;
+  }
+  if (!verified && password && user.passwordHash) {
+    verified = await verifyPassword(password, user.passwordHash);
+  }
+  if (!verified) {
+    throw new AuthError('Invalid authenticator code, backup code, or password', 401);
+  }
 
   await User.findByIdAndUpdate(userId, {
     mfaEnabled: false,

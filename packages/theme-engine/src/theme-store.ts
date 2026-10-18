@@ -1,6 +1,7 @@
 import {
   DEFAULT_TENANT_ID,
   auditThemeHealth,
+  publicPathsById,
   templateJsonSchema,
   themeSettingsSchemaSchema,
   type TemplateJson,
@@ -12,10 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { relative, resolve } from 'node:path';
 import { checksum, readThemeDirectory } from './install';
 import { PROTECTED_THEME_PATHS, guessContentType } from './storage/content-type';
-import {
-  getThemeStorage,
-  getThemeStorageKind,
-} from './storage/create-theme-storage';
+import { getThemeStorage, getThemeStorageKind } from './storage/create-theme-storage';
 import { resolveThemeLocalRoot, themeRoot } from './storage/theme-path';
 import { listLocalThemeFiles } from './storage/local-fallback';
 import type { ThemeFileMeta, ThemeRef } from './storage/types';
@@ -32,11 +30,7 @@ import {
 } from './renderer';
 import type { RenderContextInput } from './renderer';
 import { renderSection } from '@zodyk/liquid';
-import {
-  buildThemeZipFilename,
-  validateThemePath,
-  type ThemeZipFile,
-} from './zip';
+import { buildThemeZipFilename, validateThemePath, type ThemeZipFile } from './zip';
 import { buildThemeObjectKey, buildThemeStoragePrefix, listObjects } from '@zodyk/media/objects';
 
 export interface LoadedTheme {
@@ -153,7 +147,7 @@ async function loadFileMetas(themeId: Types.ObjectId | string): Promise<ThemeFil
   }));
 }
 
-  async function loadThemeFiles(
+async function loadThemeFiles(
   theme: {
     _id: Types.ObjectId;
     tenantId: string;
@@ -260,8 +254,7 @@ async function installThemeFiles(
   const storage = getThemeStorage();
   const ref = toThemeRef(theme);
 
-  const existingMetas =
-    storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
+  const existingMetas = storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
   if (existingMetas && existingMetas.length > 0) {
     await storage.deleteTheme(ref);
   }
@@ -271,7 +264,8 @@ async function installThemeFiles(
     files.map((f) => ({ path: f.path, content: f.content, contentType: f.contentType })),
   );
 
-  const prefix = installed.storagePrefix ?? themeStoragePrefix(theme.tenantId, theme._id.toString());
+  const prefix =
+    installed.storagePrefix ?? themeStoragePrefix(theme.tenantId, theme._id.toString());
   if (!theme.storagePrefix || theme.storagePrefix !== prefix) {
     await Theme.updateOne({ _id: theme._id }, { storagePrefix: prefix });
     theme.storagePrefix = prefix;
@@ -336,9 +330,7 @@ export async function loadThemeByPreview(
   tenantId = DEFAULT_TENANT_ID,
 ): Promise<LoadedTheme | null> {
   const { Theme } = await ensureDb();
-  const theme = await Theme.findOne({ _id: themeId, tenantId, previewToken })
-    .select('_id')
-    .lean();
+  const theme = await Theme.findOne({ _id: themeId, tenantId, previewToken }).select('_id').lean();
   if (!theme) return null;
   return loadThemeById(theme._id.toString(), tenantId);
 }
@@ -396,7 +388,8 @@ export async function installThemeFromDirectory(
   const { Theme } = await ensureDb();
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const files = await readThemeDirectory(dir);
-  const localRoot = getThemeStorageKind() === 'local' ? localRootForDirectory(dir, options.slug) : undefined;
+  const localRoot =
+    getThemeStorageKind() === 'local' ? localRootForDirectory(dir, options.slug) : undefined;
 
   let theme = await Theme.findOne({ tenantId, slug: options.slug });
   if (!theme) {
@@ -792,9 +785,7 @@ export async function getThemeSchemas(
 
   const allTypes = listSectionTypes(theme.files);
   const typesToParse =
-    options?.scope === 'all' || !options?.sectionTypes?.length
-      ? allTypes
-      : options.sectionTypes;
+    options?.scope === 'all' || !options?.sectionTypes?.length ? allTypes : options.sectionTypes;
 
   const sectionSchemas =
     options?.scope === 'all' || !options?.sectionTypes?.length
@@ -833,9 +824,16 @@ export async function getCustomizerBootstrap(
   const { Page, MetaObjectDefinition } = getModels();
 
   const [pages, metaObjects] = await Promise.all([
-    Page.find({ tenantId, status: 'published' }).lean(),
+    Page.find({ tenantId }).select('title slug parentId templateSuffix status').lean(),
     MetaObjectDefinition.find({ tenantId, status: 'active' }).lean(),
   ]);
+  const pagePaths = publicPathsById(
+    pages.map((page) => ({
+      id: page._id.toString(),
+      slug: page.slug,
+      parentId: page.parentId ? page.parentId.toString() : null,
+    })),
+  );
 
   const pageItems: Array<{
     id: string;
@@ -844,18 +842,31 @@ export async function getCustomizerBootstrap(
     pathname: string;
     group: string;
   }> = [
-    { id: 'home', label: 'Home page', templatePath: 'templates/index.json', pathname: '/', group: 'Pages' },
-    { id: '404', label: '404', templatePath: 'templates/404.json', pathname: '/not-found', group: 'System' },
+    {
+      id: 'home',
+      label: 'Home page',
+      templatePath: 'templates/index.json',
+      pathname: '/',
+      group: 'Pages',
+    },
+    {
+      id: '404',
+      label: '404',
+      templatePath: 'templates/404.json',
+      pathname: '/not-found',
+      group: 'System',
+    },
   ];
 
   for (const page of pages) {
+    if (page.status !== 'published') continue;
     const suffix = page.templateSuffix;
     const templatePath = suffix ? `templates/page.${suffix}.json` : 'templates/page.json';
     pageItems.push({
       id: page._id.toString(),
       label: page.title,
       templatePath,
-      pathname: `/${page.slug}`,
+      pathname: pagePaths.get(page._id.toString()) ?? `/${page.slug}`,
       group: 'Pages',
     });
   }
@@ -982,8 +993,7 @@ export async function getThemeHealth(
   if (!theme) return { issues: [], themeId: null };
 
   const filePaths =
-    options?.filePaths ??
-    (await ThemeFile.find({ themeId: theme._id }).lean()).map((f) => f.path);
+    options?.filePaths ?? (await ThemeFile.find({ themeId: theme._id }).lean()).map((f) => f.path);
   const filesMap = options?.files ?? (await loadThemeFiles(theme));
 
   const metaObjects =

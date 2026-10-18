@@ -24,7 +24,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "node --import tsx --test src/website-cache.test.ts"
+    "test": "vitest run && node --import tsx --test src/website-cache.test.ts"
   },
   "dependencies": {
     "@zodyk/auth": "workspace:*",
@@ -37,6 +37,7 @@
     "mongoose": "^8.15.1"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }
