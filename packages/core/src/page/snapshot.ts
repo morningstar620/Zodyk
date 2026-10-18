@@ -65,8 +65,12 @@ function copySeo(seo: PageSeo | null | undefined): PageSeo {
   const next: PageSeo = {};
   if (seo.metaTitle) next.metaTitle = seo.metaTitle;
   if (seo.metaDescription) next.metaDescription = seo.metaDescription;
+  if (seo.ogTitle) next.ogTitle = seo.ogTitle;
+  if (seo.ogDescription) next.ogDescription = seo.ogDescription;
   if (seo.ogImage) next.ogImage = seo.ogImage;
   if (seo.canonicalUrl) next.canonicalUrl = seo.canonicalUrl;
+  if (seo.twitterCard) next.twitterCard = seo.twitterCard;
+  if (seo.robots) next.robots = seo.robots;
   return next;
 }
 

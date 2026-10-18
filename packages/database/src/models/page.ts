@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
+import { DEFAULT_TENANT_ID, type PageSeo } from '@zodyk/core';
 import { Schema, type Document, type Model, type Types } from 'mongoose';
 
 export type PageStatus = 'draft' | 'published' | 'scheduled' | 'archived';
@@ -10,12 +10,7 @@ export interface IPage extends Document {
   parentId?: Types.ObjectId;
   templateSuffix?: string;
   body?: string;
-  seo: {
-    metaTitle?: string;
-    metaDescription?: string;
-    ogImage?: string;
-    canonicalUrl?: string;
-  };
+  seo: PageSeo;
   status: PageStatus;
   publishedAt?: Date;
   scheduledAt?: Date;
@@ -37,8 +32,12 @@ const pageSchema = new Schema<IPage>(
     seo: {
       metaTitle: { type: String },
       metaDescription: { type: String },
+      ogTitle: { type: String },
+      ogDescription: { type: String },
       ogImage: { type: String },
       canonicalUrl: { type: String },
+      twitterCard: { type: String },
+      robots: { type: String },
     },
     status: {
       type: String,

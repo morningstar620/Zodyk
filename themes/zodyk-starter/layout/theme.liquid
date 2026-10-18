@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page.title | default: shop.name }}</title>
+  <title>{{ page.seo.metaTitle | default: metaobject.seo.metaTitle | default: page.title | default: metaobject.title | default: shop.name | escape }}</title>
   {{ content_for_header }}
   {{ 'theme.css' | asset_url | stylesheet_tag }}
   {% if settings.custom_css != blank %}

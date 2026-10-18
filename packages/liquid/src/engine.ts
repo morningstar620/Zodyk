@@ -54,9 +54,7 @@ export function createLiquidEngine(options: LiquidEngineOptions): {
 function orderedBlocks(instance: SectionInstance): Array<BlockInstance & { id: string }> {
   const blocks = instance.blocks ?? {};
   const order = instance.block_order ?? Object.keys(blocks);
-  return order
-    .filter((id) => blocks[id])
-    .map((id) => ({ id, ...blocks[id]! }));
+  return order.filter((id) => blocks[id]).map((id) => ({ id, ...blocks[id]! }));
 }
 
 export async function renderSection(
@@ -126,10 +124,13 @@ export async function renderLayout(
     return contentForLayout;
   }
 
+  const providedHeader = context.content_for_header;
+  const contentForHeader = typeof providedHeader === 'string' ? providedHeader : '';
+
   const fullContext = {
     ...context,
     content_for_layout: `<div id="zodyk-page" data-zodyk-page>${contentForLayout}</div>`,
-    content_for_header: '',
+    content_for_header: contentForHeader,
   };
 
   return engine.parseAndRender(layoutContent, fullContext);

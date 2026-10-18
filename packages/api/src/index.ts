@@ -52,3 +52,4 @@ export * from './pages/handlers';
 export * from './menus/handlers';
 export * from './themes/handlers';
 export * from './storage/handlers';
+export * from './seo/handlers';

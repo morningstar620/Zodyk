@@ -277,6 +277,12 @@ importers:
       '@zodyk/liquid':
         specifier: workspace:*
         version: link:../../packages/liquid
+      '@zodyk/media':
+        specifier: workspace:*
+        version: link:../../packages/media
+      '@zodyk/seo':
+        specifier: workspace:*
+        version: link:../../packages/seo
       '@zodyk/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui
@@ -341,6 +347,9 @@ importers:
       '@zodyk/payments':
         specifier: workspace:*
         version: link:../payments
+      '@zodyk/seo':
+        specifier: workspace:*
+        version: link:../seo
       '@zodyk/theme-engine':
         specifier: workspace:*
         version: link:../theme-engine
@@ -580,13 +589,16 @@ importers:
 
   packages/seo:
     dependencies:
-      '@zodyk/core':
-        specifier: workspace:*
-        version: link:../core
+      zod:
+        specifier: ^3.25.51
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   packages/shared-ui:
     dependencies:

@@ -80,7 +80,9 @@ export {
   menuToLiquid,
   menusToLinklists,
   type ResolvedRoute,
+  type RouteMetaDefinition,
+  type RouteMetaEntry,
+  type RoutePage,
   type RouteMenu,
   type RouteMenuItem,
-  type RoutePage,
 } from './router';

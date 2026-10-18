@@ -10,6 +10,7 @@ export interface RoutePage {
   body?: string;
   status: string;
   seo?: Record<string, unknown>;
+  updatedAt?: Date;
 }
 
 export interface RouteMetaDefinition {
@@ -38,6 +39,8 @@ export interface RouteMetaEntry {
   status: string;
   locale: string;
   data: Record<string, unknown>;
+  translations?: Record<string, Record<string, unknown>>;
+  updatedAt?: Date;
 }
 
 export interface ResolvedRoute {

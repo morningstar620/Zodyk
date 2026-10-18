@@ -1,9 +1,10 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, Input, Label } from '@zodyk/shared-ui';
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, Select } from '@zodyk/shared-ui';
 import type { PageSeo } from '@zodyk/core';
 import { Pencil } from 'lucide-react';
 import { useState } from 'react';
+import { MediaPicker } from '@/components/media/MediaPicker';
 
 type PageSeoCardProps = {
   title: string;
@@ -104,6 +105,86 @@ export function PageSeoCard({
                 />
               </div>
             </div>
+            <div>
+              <Label htmlFor="seo-robots">Robots</Label>
+              <Select
+                id="seo-robots"
+                value={seo.robots ?? ''}
+                onChange={(e) =>
+                  onChange({
+                    ...seo,
+                    robots:
+                      e.target.value === 'noindex' || e.target.value === 'index'
+                        ? e.target.value
+                        : undefined,
+                  })
+                }
+                className="mt-1.5"
+              >
+                <option value="">Default</option>
+                <option value="index">Index</option>
+                <option value="noindex">No index</option>
+              </Select>
+            </div>
+            <div className="space-y-4 border-t border-border pt-4">
+              <p className="text-sm font-medium">Social sharing</p>
+              <div>
+                <Label htmlFor="og-title">Social title</Label>
+                <Input
+                  id="og-title"
+                  value={seo.ogTitle ?? ''}
+                  onChange={(e) => onChange({ ...seo, ogTitle: e.target.value })}
+                  placeholder={seo.metaTitle || title || 'Social title'}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="og-description">Social description</Label>
+                <textarea
+                  id="og-description"
+                  value={seo.ogDescription ?? ''}
+                  onChange={(e) => onChange({ ...seo, ogDescription: e.target.value })}
+                  placeholder={seo.metaDescription || 'Social description'}
+                  rows={3}
+                  className="mt-1.5 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <div>
+                <Label htmlFor="twitter-card">Twitter card</Label>
+                <Select
+                  id="twitter-card"
+                  value={seo.twitterCard ?? ''}
+                  onChange={(e) =>
+                    onChange({
+                      ...seo,
+                      twitterCard:
+                        e.target.value === 'summary' || e.target.value === 'summary_large_image'
+                          ? e.target.value
+                          : undefined,
+                    })
+                  }
+                  className="mt-1.5"
+                >
+                  <option value="">Automatic</option>
+                  <option value="summary">Summary</option>
+                  <option value="summary_large_image">Summary large image</option>
+                </Select>
+              </div>
+              <div>
+                <Label>Open Graph and Twitter image</Label>
+                <div className="mt-1.5">
+                  <MediaPicker
+                    mode="single"
+                    accept="image/*"
+                    value={seo.ogImage}
+                    onChange={(value) => {
+                      const id = typeof value === 'string' ? value : value[0];
+                      onChange({ ...seo, ogImage: id || undefined });
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         ) : title || seo.metaTitle ? (
           <div className="space-y-1">
@@ -114,6 +195,9 @@ export function PageSeoCard({
             <p className="text-base text-primary">{displayTitle}</p>
             {displayDescription && (
               <p className="text-sm text-muted-foreground line-clamp-2">{displayDescription}</p>
+            )}
+            {seo.robots === 'noindex' && (
+              <p className="text-xs text-muted-foreground">Hidden from search engines</p>
             )}
           </div>
         ) : (

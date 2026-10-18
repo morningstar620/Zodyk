@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     '@zodyk/liquid',
     '@zodyk/theme-engine',
     '@zodyk/media',
+    '@zodyk/seo',
   ],
   serverExternalPackages: [
     'mongoose',
@@ -35,11 +36,20 @@ const nextConfig: NextConfig = {
 
     return config;
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: '/sitemap.xml', destination: '/seo/sitemap' },
+        { source: '/robots.txt', destination: '/seo/robots' },
+      ],
+    };
+  },
   async headers() {
     return [
       {
         // Live HTML: CDN may cache; route handler overrides for preview/designMode.
-        source: '/((?!assets/|zodyk-nav\\.js|zodyk-design-mode\\.js|api/).*)',
+        source:
+          '/((?!assets/|zodyk-nav\\.js|zodyk-design-mode\\.js|api/|sitemap\\.xml|robots\\.txt).*)',
         headers: [
           {
             key: 'Cache-Control',
