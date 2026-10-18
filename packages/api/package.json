@@ -31,6 +31,7 @@
     "@zodyk/database": "workspace:*",
     "@zodyk/media": "workspace:*",
     "@zodyk/payments": "workspace:*",
+    "@zodyk/seo": "workspace:*",
     "@zodyk/theme-engine": "workspace:*",
     "@zodyk/theme-language": "workspace:*",
     "mongoose": "^8.15.1"

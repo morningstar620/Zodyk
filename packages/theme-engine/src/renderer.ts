@@ -6,12 +6,7 @@ import {
   type TemplateJson,
   type ViewType,
 } from '@zodyk/core';
-import {
-  createLiquidEngine,
-  parseSectionSchema,
-  renderLayout,
-  renderSection,
-} from '@zodyk/liquid';
+import { createLiquidEngine, parseSectionSchema, renderLayout, renderSection } from '@zodyk/liquid';
 import type { Liquid, ThemeFileMap } from '@zodyk/liquid';
 
 export interface ShopContext {
@@ -61,6 +56,8 @@ export interface RenderContextInput {
   };
   linklists?: Record<string, Record<string, unknown>>;
   menus?: Record<string, Record<string, unknown>>;
+  /** Prebuilt head tags inserted by the theme layout. Values must already be HTML-escaped. */
+  content_for_header?: string;
 }
 
 const liquidEngineCache = new Map<
@@ -116,6 +113,7 @@ export function buildBaseContext(input: RenderContextInput): Record<string, unkn
     paginate: input.paginate,
     linklists: input.linklists ?? {},
     menus: input.menus ?? input.linklists ?? {},
+    content_for_header: input.content_for_header ?? '',
     routes: {
       root: input.shop.url,
     },
@@ -203,7 +201,11 @@ function parseLocales(files: Record<string, string>): Record<string, string> {
   }
 }
 
-function flattenLocale(prefix: string, obj: Record<string, unknown>, out: Record<string, string>): void {
+function flattenLocale(
+  prefix: string,
+  obj: Record<string, unknown>,
+  out: Record<string, string>,
+): void {
   for (const [key, value] of Object.entries(obj)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === 'string') {

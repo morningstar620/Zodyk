@@ -24,12 +24,17 @@ export interface IPaymentsSettings {
   gateways: Record<string, IGatewayCredentialStore>;
 }
 
+export interface ISeoSettings {
+  robotsTxt?: string;
+}
+
 export interface IPlatformSettings extends Document {
   tenantId: string;
   media?: {
     r2?: IR2Settings;
   };
   payments?: IPaymentsSettings;
+  seo?: ISeoSettings;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -71,6 +76,9 @@ const platformSettingsSchema = new Schema<IPlatformSettings>(
       r2: r2SettingsSchema,
     },
     payments: paymentsSettingsSchema,
+    seo: {
+      robotsTxt: { type: String },
+    },
   },
   { timestamps: true },
 );

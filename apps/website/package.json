@@ -13,6 +13,8 @@
     "@zodyk/core": "workspace:*",
     "@zodyk/database": "workspace:*",
     "@zodyk/liquid": "workspace:*",
+    "@zodyk/media": "workspace:*",
+    "@zodyk/seo": "workspace:*",
     "@zodyk/shared-ui": "workspace:*",
     "@zodyk/theme-engine": "workspace:*",
     "next": "^15.3.3",

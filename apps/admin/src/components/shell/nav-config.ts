@@ -94,6 +94,7 @@ export function getBreadcrumbs(pathname: string): { label: string; href?: string
     users: 'Users',
     roles: 'Roles',
     settings: 'Settings',
+    seo: 'SEO',
     payments: 'Payments',
     menus: 'Menus',
     forms: 'Forms',

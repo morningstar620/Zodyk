@@ -7,6 +7,7 @@ import {
   createMetaEntry,
   createMetaObject,
   createPage,
+  createRedirect,
   createSystemEntity,
   createSystemRecord,
   createThemeFileHandler,
@@ -17,6 +18,7 @@ import {
   deleteMetaEntry,
   deleteMetaObject,
   deletePage,
+  deleteRedirect,
   deleteRole,
   deleteSystemEntity,
   deleteSystemRecord,
@@ -33,6 +35,7 @@ import {
   getMetaEntry,
   getMetaObject,
   getPage,
+  getSeoSettings,
   getRole,
   getStorageHealthHandler,
   getSystemEntity,
@@ -56,6 +59,7 @@ import {
   listMetaEntries,
   listMetaObjects,
   listPages,
+  listRedirects,
   listRoles,
   listSystemEntities,
   listSystemRecords,
@@ -78,7 +82,9 @@ import {
   updateMetaEntry,
   updateMetaObject,
   updatePage,
+  updateRedirect,
   updateRole,
+  updateSeoSettings,
   updateSystemEntity,
   updateSystemRecord,
   updateThemeSettings,
@@ -766,6 +772,69 @@ export function createV1Router(): Router {
       const body = await request.json();
       return Response.json(
         await updatePaymentsSettingsHandler(session, body, getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/settings/seo', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await getSeoSettings(session));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'patch', '/settings/seo', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(await updateSeoSettings(session, body, getClientIp(request)));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/redirects', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listRedirects(session));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/redirects', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(await createRedirect(session, body, getClientIp(request)), {
+        status: 201,
+      });
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'patch', '/redirects/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(
+        await updateRedirect(session, requireParam(params, 'id'), body, getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'delete', '/redirects/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(
+        await deleteRedirect(session, requireParam(params, 'id'), getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);

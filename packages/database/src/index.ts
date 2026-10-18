@@ -16,6 +16,7 @@ import { getPageModel } from './models/page';
 import { getPaymentModel } from './models/payment';
 import { getPaymentEventModel } from './models/payment-event';
 import { getPlatformSettingsModel } from './models/platform-settings';
+import { getRedirectModel } from './models/redirect';
 import { getRoleModel } from './models/role';
 import { getSubscriptionIntentModel } from './models/subscription-intent';
 import { getSystemEntityDefinitionModel } from './models/system-entity-definition';
@@ -63,6 +64,7 @@ export function getModels() {
     SystemEntityRecord: getSystemEntityRecordModel(mongoose),
     MediaAsset: getMediaAssetModel(mongoose),
     PlatformSettings: getPlatformSettingsModel(mongoose),
+    Redirect: getRedirectModel(mongoose),
     Page: getPageModel(mongoose),
     Menu: getMenuModel(mongoose),
     Theme: getThemeModel(mongoose),
@@ -93,6 +95,7 @@ export * from './models/system-entity-definition';
 export * from './models/system-entity-record';
 export * from './models/media-asset';
 export * from './models/platform-settings';
+export * from './models/redirect';
 export * from './models/page';
 export * from './models/menu';
 export * from './models/theme';

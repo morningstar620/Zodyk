@@ -2,11 +2,26 @@ import { z } from 'zod';
 
 export const pageStatusSchema = z.enum(['draft', 'published', 'scheduled', 'archived']);
 
+function emptyToUndefined(value: unknown): unknown {
+  if (value === '' || value === null) return undefined;
+  return value;
+}
+
+const optionalText = (max: number) =>
+  z.preprocess(emptyToUndefined, z.string().max(max).optional());
+
 export const pageSeoSchema = z.object({
-  metaTitle: z.string().max(200).optional(),
-  metaDescription: z.string().max(500).optional(),
-  ogImage: z.string().optional(),
-  canonicalUrl: z.string().url().optional(),
+  metaTitle: optionalText(200),
+  metaDescription: optionalText(500),
+  ogTitle: optionalText(200),
+  ogDescription: optionalText(500),
+  ogImage: optionalText(2000),
+  canonicalUrl: z.preprocess(emptyToUndefined, z.string().url().max(2000).optional()),
+  twitterCard: z.preprocess(
+    emptyToUndefined,
+    z.enum(['summary', 'summary_large_image']).optional(),
+  ),
+  robots: z.preprocess(emptyToUndefined, z.enum(['index', 'noindex']).optional()),
 });
 
 export const createPageSchema = z.object({
@@ -42,5 +57,8 @@ export type CreatePageInput = z.infer<typeof createPageSchema>;
 export type UpdatePageInput = z.infer<typeof updatePageSchema>;
 
 export function slugToHandle(slug: string): string {
-  return slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return slug
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }

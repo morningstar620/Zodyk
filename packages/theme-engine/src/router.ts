@@ -1,4 +1,3 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { ViewType } from '@zodyk/core';
 
 export interface RoutePage {
@@ -10,6 +9,8 @@ export interface RoutePage {
   body?: string;
   status: string;
   seo?: Record<string, unknown>;
+  parentId?: { toString(): string } | string | null;
+  updatedAt?: Date;
 }
 
 export interface RouteMetaDefinition {
@@ -38,6 +39,8 @@ export interface RouteMetaEntry {
   status: string;
   locale: string;
   data: Record<string, unknown>;
+  translations?: Record<string, Record<string, unknown>>;
+  updatedAt?: Date;
 }
 
 export interface ResolvedRoute {
@@ -51,7 +54,10 @@ export interface ResolvedRoute {
 }
 
 function splitPath(path: string): string[] {
-  return path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  return path
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
 }
 
 function matchPattern(pattern: string, segments: string[]): Record<string, string> | null {
@@ -110,7 +116,10 @@ async function resolveRouteInternal(
 
     if (routing.archiveEnabled) {
       const archiveSegments = splitPath(archivePath);
-      if (segments.length === archiveSegments.length && segments.join('/') === archiveSegments.join('/')) {
+      if (
+        segments.length === archiveSegments.length &&
+        segments.join('/') === archiveSegments.join('/')
+      ) {
         const page = 1;
         const pageSize = def.display?.archivePageSize ?? 12;
         const result = await options.findMetaEntries(def.slug, {
@@ -224,10 +233,7 @@ function isPathActive(itemUrl: string, currentPath: string): boolean {
   return current === item || current.startsWith(`${item}/`);
 }
 
-function menuItemToLiquid(
-  item: RouteMenuItem,
-  currentPath: string,
-): Record<string, unknown> {
+function menuItemToLiquid(item: RouteMenuItem, currentPath: string): Record<string, unknown> {
   const childLinks = (item.items ?? []).map((child) => menuItemToLiquid(child, currentPath));
   const active = isPathActive(item.url, currentPath);
   const childActive = childLinks.some(

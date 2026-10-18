@@ -11,13 +11,18 @@ import {
   resolveRoute,
   type LoadedTheme,
 } from '@zodyk/theme-engine';
+import { applyDocumentTitle } from '@zodyk/seo';
 import { cookies } from 'next/headers';
+import { createRequestTimings, logSlowRender, type RequestTimings } from './request-timing';
+import { resolvePublicImageUrl } from './public-image';
+import { composeRouteHead } from './seo-document';
 import {
-  createRequestTimings,
-  logSlowRender,
-  type RequestTimings,
-} from './request-timing';
-import { getCachedPageHtml, getSiteData, setCachedPageHtml, invalidateSiteCache } from './site-cache';
+  getCachedPageHtml,
+  getSiteData,
+  setCachedPageHtml,
+  invalidateSiteCache,
+} from './site-cache';
+import { getShopUrl } from './site-url';
 
 export { invalidateSiteCache };
 
@@ -32,10 +37,6 @@ export interface RenderSiteResult {
   status: number;
   timings: Record<string, number>;
   cacheHit: boolean;
-}
-
-function getShopUrl(): string {
-  return process.env.WEBSITE_URL ?? process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001';
 }
 
 type StoredMenuItem = { label: string; url: string; type: string; items?: StoredMenuItem[] };
@@ -204,6 +205,14 @@ export async function renderSitePage(
   timings.mark('route', routeStart);
 
   const shopUrl = getShopUrl();
+  const siteName = String(theme.settings.site_name ?? 'Zodyk');
+  const composed = await composeRouteHead({
+    route,
+    pages,
+    siteUrl: shopUrl,
+    siteName,
+    resolveImage: resolvePublicImageUrl,
+  });
   const routeMenus = menus.map((menu) => ({
     title: menu.title,
     handle: menu.handle,
@@ -211,11 +220,12 @@ export async function renderSitePage(
   }));
   const linklists = menusToLinklists(routeMenus, pathname);
   const baseContext = {
-    shop: { name: String(theme.settings.site_name ?? 'Zodyk'), url: shopUrl, currency: 'USD' },
+    shop: { name: siteName, url: shopUrl, currency: 'USD' },
     request: { path: pathname, locale: 'en' },
     settings: theme.settings,
     linklists,
     menus: linklists,
+    content_for_header: composed.header,
   };
 
   let pageTemplateSuffix: string | undefined;
@@ -304,7 +314,7 @@ export async function renderSitePage(
   timings.mark('liquid-render', liquidStart);
 
   const status = route.view === 'not_found' ? 404 : 200;
-  const html = injectScripts(rendered, options);
+  const html = injectScripts(applyDocumentTitle(rendered, composed.documentTitle), options);
   if (!options.designMode) {
     setCachedPageHtml(cacheKey, html, status);
   }

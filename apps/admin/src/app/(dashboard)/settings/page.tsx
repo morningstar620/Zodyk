@@ -15,6 +15,11 @@ const settingsLinks = [
     title: 'Payments',
     description: 'Connect Stripe, Razorpay, or another payment gateway',
   },
+  {
+    href: '/settings/seo',
+    title: 'SEO',
+    description: 'Edit robots.txt and manage 301/302 redirects',
+  },
 ];
 
 export default function SettingsPage() {
