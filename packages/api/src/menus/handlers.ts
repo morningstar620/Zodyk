@@ -11,6 +11,7 @@ import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@
 import { connectDatabase, getModels } from '@zodyk/database';
 import { loadPagePathNodes } from '../pages/paths';
 import { invalidateCatalogCache } from '../themes/catalog-cache';
+import { invalidateWebsiteCache } from '../website-cache';
 
 export interface LinkTargetOption {
   id: string;
@@ -83,15 +84,6 @@ function ensureItemIds(items: MenuItemInput[]): MenuItemInput[] {
     id: item.id ?? crypto.randomUUID(),
     items: ensureItemIds(item.items ?? []),
   }));
-}
-
-async function invalidateWebsiteCache() {
-  const websiteUrl = process.env.WEBSITE_URL ?? 'http://localhost:3001';
-  try {
-    await fetch(`${websiteUrl}/api/revalidate`, { method: 'POST' });
-  } catch {
-    /* website may be offline during admin save */
-  }
 }
 
 function buildMetaEntryUrl(

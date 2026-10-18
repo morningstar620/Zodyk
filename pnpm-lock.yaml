@@ -292,6 +292,9 @@ importers:
       next:
         specifier: ^15.3.3
         version: 15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      next-auth:
+        specifier: 5.0.0-beta.28
+        version: 5.0.0-beta.28(next@15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(nodemailer@6.10.1)(react@19.2.7)
       react:
         specifier: ^19.1.0
         version: 19.2.7

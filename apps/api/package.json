@@ -9,7 +9,7 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run",
+    "test": "vitest run && node --import tsx --test src/cors.test.ts src/cors-app.test.ts",
     "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {

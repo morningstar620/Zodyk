@@ -27,6 +27,7 @@ export interface WizardValues {
 export interface GeneratedSecrets {
   authSecret: string;
   encryptionKey: string;
+  revalidateSecret: string;
 }
 
 const ADMIN_URL = 'http://localhost:5001';
@@ -38,6 +39,7 @@ export function generateSecrets(): GeneratedSecrets {
     authSecret: randomBytes(32).toString('base64'),
     // 32 bytes -> 64 hex chars, used for encrypting secrets (e.g. MFA) at rest.
     encryptionKey: randomBytes(32).toString('hex'),
+    revalidateSecret: randomBytes(32).toString('base64'),
   };
 }
 
@@ -49,6 +51,7 @@ export function buildEnvValues(values: WizardValues, secrets: GeneratedSecrets):
   const map: Record<string, string> = {
     MONGODB_URI: values.mongodbUri,
     AUTH_SECRET: secrets.authSecret,
+    REVALIDATE_SECRET: secrets.revalidateSecret,
     AUTH_URL: ADMIN_URL,
     ENCRYPTION_KEY: secrets.encryptionKey,
     ADMIN_EMAIL: values.adminEmail,
@@ -133,6 +136,9 @@ ADMIN_NAME=Super Admin
 ADMIN_URL=${ADMIN_URL}
 WEBSITE_URL=${WEBSITE_URL}
 NEXT_PUBLIC_ALLOW_REGISTRATION=false
+
+# Required in production for POST /api/revalidate
+REVALIDATE_SECRET=
 
 # Email (magic links + password reset)
 SMTP_HOST=
