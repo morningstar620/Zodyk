@@ -8,6 +8,7 @@ const publicPaths = [
   '/reset-password',
   '/login/mfa',
   '/auth/login',
+  '/pay',
 ];
 
 export default auth((req) => {

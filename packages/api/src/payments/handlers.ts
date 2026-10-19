@@ -1,9 +1,4 @@
-import {
-  AuthError,
-  logAuditEvent,
-  requirePermission,
-  type AuthSession,
-} from '@zodyk/auth';
+import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import {
   createPaymentSchema,
   createSubscriptionSchema,
@@ -47,9 +42,7 @@ export async function updatePaymentsSettingsHandler(
   const parsed = paymentsSettingsUpdateSchema.parse(body);
   const credentials =
     parsed.credentials &&
-    Object.fromEntries(
-      Object.entries(parsed.credentials).map(([k, v]) => [k, String(v)]),
-    );
+    Object.fromEntries(Object.entries(parsed.credentials).map(([k, v]) => [k, String(v)]));
 
   await savePaymentsSettings({
     activeGateway: parsed.activeGateway,
@@ -88,7 +81,11 @@ export async function getPaymentHandler(session: AuthSession | null, id: string)
   return getPayment(id);
 }
 
-export async function createPaymentHandler(session: AuthSession | null, body: unknown, ip?: string) {
+export async function createPaymentHandler(
+  session: AuthSession | null,
+  body: unknown,
+  ip?: string,
+) {
   requirePermission(session, 'payments:create');
   const parsed = createPaymentSchema.parse(body);
   const payment = await createPayment(parsed);
@@ -189,12 +186,26 @@ export async function paymentsWebhookHandler(gateway: string, request: Request) 
   });
 }
 
+export {
+  createPriceHandler,
+  createProductHandler,
+  downloadInvoiceHandler,
+  getPaymentLinkHandler,
+  getPaymentMetricsHandler,
+  getProductHandler,
+  getSubscriptionHandler,
+  listPaymentEventsHandler,
+  listPricesHandler,
+  listProductsHandler,
+  listSubscriptionsHandler,
+  startPaymentLinkCheckoutHandler,
+  updatePriceHandler,
+  updateProductHandler,
+} from './billing-handlers';
+
 export function handlePaymentsError(error: unknown): Response | null {
   if (error instanceof PaymentsError) {
-    return Response.json(
-      { error: error.message, code: error.code },
-      { status: error.status },
-    );
+    return Response.json({ error: error.message, code: error.code }, { status: error.status });
   }
   return null;
 }

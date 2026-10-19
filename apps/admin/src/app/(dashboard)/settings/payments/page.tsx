@@ -29,6 +29,12 @@ interface GatewayMeta {
   description?: string;
   region?: string;
   ready: boolean;
+  capabilities: {
+    oneTime: boolean;
+    refunds: boolean;
+    webhooks: boolean;
+    subscriptions: boolean;
+  };
   credentialFields: CredentialField[];
 }
 
@@ -137,15 +143,15 @@ export default function PaymentsSettingsPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-900">Payments</h1>
         <p className="text-zinc-600">
-          Connect a payment gateway. Other features (courses, bookings, invoices) can charge
-          through this layer.
+          Connect a payment gateway. Other features (courses, bookings, invoices) can charge through
+          this layer.
         </p>
       </div>
 
       {status.readOnly && (
         <Alert>
-          Payments are configured via environment variables. Update your deployment env to
-          change settings.
+          Payments are configured via environment variables. Update your deployment env to change
+          settings.
         </Alert>
       )}
 
@@ -170,9 +176,9 @@ export default function PaymentsSettingsPage() {
               onChange={(e) => setActiveGateway(e.target.value)}
             >
               {status.gateways.map((g) => (
-                <option key={g.id} value={g.id}>
+                <option key={g.id} value={g.id} disabled={!g.ready}>
                   {g.label}
-                  {!g.ready ? ' (adapter pending)' : ''}
+                  {!g.ready ? ' (not available)' : ''}
                   {g.region ? ` — ${g.region}` : ''}
                 </option>
               ))}
@@ -180,8 +186,17 @@ export default function PaymentsSettingsPage() {
             {selected?.description && (
               <p className="text-sm text-zinc-500">{selected.description}</p>
             )}
+            {selected?.ready && (
+              <p className="text-sm text-zinc-500">
+                {selected.capabilities.subscriptions
+                  ? 'One-time payments and subscriptions.'
+                  : 'One-time payments only. Subscriptions are not available for this gateway.'}
+              </p>
+            )}
             {selected && !selected.ready && (
-              <Badge variant="secondary">Adapter pending — credentials can be saved for later</Badge>
+              <Badge variant="secondary">
+                Not available yet. This gateway cannot be activated.
+              </Badge>
             )}
           </div>
 
@@ -209,9 +224,7 @@ export default function PaymentsSettingsPage() {
                 id={`cred-${field.key}`}
                 type={field.secret ? 'password' : 'text'}
                 value={values[field.key] ?? ''}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [field.key]: e.target.value }))
-                }
+                onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                 disabled={status.readOnly}
                 placeholder={
                   field.secret && status.configured && activeGateway === status.activeGateway
@@ -237,7 +250,11 @@ export default function PaymentsSettingsPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           {!status.readOnly && (
-            <Button type="button" onClick={() => void save()} disabled={saving || !activeGateway}>
+            <Button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving || !activeGateway || !selected?.ready}
+            >
               {saving ? 'Saving…' : 'Save'}
             </Button>
           )}

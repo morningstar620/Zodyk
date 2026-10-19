@@ -13,6 +13,135 @@ import type {
 } from '../types';
 import { headerValue } from '../utils';
 
+function stripeResourceId(value: string | { id: string } | null | undefined): string | undefined {
+  if (!value) return undefined;
+  return typeof value === 'string' ? value : value.id;
+}
+
+function mapStripeSubscriptionStatus(status: string): string | undefined {
+  switch (status) {
+    case 'trialing':
+    case 'active':
+    case 'past_due':
+    case 'paused':
+      return status;
+    case 'canceled':
+    case 'cancelled':
+    case 'incomplete_expired':
+      return 'cancelled';
+    case 'unpaid':
+      return 'past_due';
+    default:
+      return undefined;
+  }
+}
+
+function metadataSubscriptionId(metadata: Stripe.Metadata | null | undefined): string | undefined {
+  return metadata?.subscriptionId || undefined;
+}
+
+/** Map a verified Stripe event onto the gateway-agnostic payment event. */
+export function normalizeStripeEvent(event: Stripe.Event): NormalizedPaymentEvent {
+  const base = {
+    eventId: event.id,
+    raw: event,
+  };
+
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object;
+      if (session.mode === 'subscription') {
+        const gatewaySubscriptionId = stripeResourceId(session.subscription);
+        const status =
+          session.payment_status === 'paid'
+            ? 'active'
+            : session.payment_status === 'no_payment_required'
+              ? 'trialing'
+              : undefined;
+        return {
+          ...base,
+          type: 'subscription.updated',
+          ...(gatewaySubscriptionId ? { gatewaySubscriptionId } : {}),
+          subscriptionId: metadataSubscriptionId(session.metadata),
+          amount: session.amount_total ?? undefined,
+          currency: session.currency?.toUpperCase(),
+          ...(status ? { status } : {}),
+          promotePendingOnly: true,
+        };
+      }
+      return {
+        ...base,
+        // One-time sessions still ignore unpaid vs paid (tracked as issue #21).
+        type: session.payment_status === 'paid' ? 'payment.succeeded' : 'payment.succeeded',
+        gatewayPaymentId: session.id,
+        paymentId: session.metadata?.paymentId,
+        amount: session.amount_total ?? undefined,
+        currency: session.currency?.toUpperCase(),
+        status: session.payment_status ?? undefined,
+      };
+    }
+    case 'payment_intent.succeeded': {
+      const pi = event.data.object;
+      return {
+        ...base,
+        type: 'payment.succeeded',
+        gatewayPaymentId: pi.id,
+        paymentId: pi.metadata?.paymentId,
+        amount: pi.amount,
+        currency: pi.currency.toUpperCase(),
+        status: pi.status,
+      };
+    }
+    case 'payment_intent.payment_failed': {
+      const pi = event.data.object;
+      return {
+        ...base,
+        type: 'payment.failed',
+        gatewayPaymentId: pi.id,
+        paymentId: pi.metadata?.paymentId,
+        amount: pi.amount,
+        currency: pi.currency.toUpperCase(),
+        status: pi.status,
+      };
+    }
+    case 'charge.refunded': {
+      const charge = event.data.object;
+      return {
+        ...base,
+        type: 'payment.refunded',
+        gatewayPaymentId: stripeResourceId(charge.payment_intent),
+        amount: charge.amount_refunded,
+        currency: charge.currency.toUpperCase(),
+      };
+    }
+    case 'customer.subscription.updated':
+    case 'customer.subscription.deleted': {
+      const sub = event.data.object;
+      const period = sub as Stripe.Subscription & {
+        current_period_start?: number;
+        current_period_end?: number;
+      };
+      const deleted = event.type === 'customer.subscription.deleted';
+      const status = deleted ? 'cancelled' : mapStripeSubscriptionStatus(sub.status);
+      return {
+        ...base,
+        type: deleted ? 'subscription.cancelled' : 'subscription.updated',
+        gatewaySubscriptionId: sub.id,
+        subscriptionId: metadataSubscriptionId(sub.metadata),
+        ...(status ? { status } : {}),
+        ...(typeof period.current_period_start === 'number'
+          ? { currentPeriodStart: new Date(period.current_period_start * 1000) }
+          : {}),
+        ...(typeof period.current_period_end === 'number'
+          ? { currentPeriodEnd: new Date(period.current_period_end * 1000) }
+          : {}),
+      };
+    }
+    default:
+      return { ...base, type: 'unknown' };
+  }
+}
+
 const credentialsSchema = z.object({
   secretKey: z.string().min(1),
   webhookSecret: z.string().min(1).optional().or(z.literal('')),
@@ -121,77 +250,7 @@ function createStripeGateway(config: GatewayConfig): PaymentGateway {
         );
       }
 
-      const base = {
-        eventId: event.id,
-        raw: event,
-      };
-
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
-          return {
-            ...base,
-            type: session.payment_status === 'paid' ? 'payment.succeeded' : 'payment.succeeded',
-            gatewayPaymentId: session.id,
-            paymentId: session.metadata?.paymentId,
-            amount: session.amount_total ?? undefined,
-            currency: session.currency?.toUpperCase(),
-            status: session.payment_status ?? undefined,
-          };
-        }
-        case 'payment_intent.succeeded': {
-          const pi = event.data.object as Stripe.PaymentIntent;
-          return {
-            ...base,
-            type: 'payment.succeeded',
-            gatewayPaymentId: pi.id,
-            paymentId: pi.metadata?.paymentId,
-            amount: pi.amount,
-            currency: pi.currency.toUpperCase(),
-            status: pi.status,
-          };
-        }
-        case 'payment_intent.payment_failed': {
-          const pi = event.data.object as Stripe.PaymentIntent;
-          return {
-            ...base,
-            type: 'payment.failed',
-            gatewayPaymentId: pi.id,
-            paymentId: pi.metadata?.paymentId,
-            amount: pi.amount,
-            currency: pi.currency.toUpperCase(),
-            status: pi.status,
-          };
-        }
-        case 'charge.refunded': {
-          const charge = event.data.object as Stripe.Charge;
-          return {
-            ...base,
-            type: 'payment.refunded',
-            gatewayPaymentId:
-              typeof charge.payment_intent === 'string'
-                ? charge.payment_intent
-                : charge.payment_intent?.id,
-            amount: charge.amount_refunded,
-            currency: charge.currency.toUpperCase(),
-          };
-        }
-        case 'customer.subscription.updated':
-        case 'customer.subscription.deleted': {
-          const sub = event.data.object as Stripe.Subscription;
-          return {
-            ...base,
-            type:
-              event.type === 'customer.subscription.deleted'
-                ? 'subscription.cancelled'
-                : 'subscription.updated',
-            gatewaySubscriptionId: sub.id,
-            status: sub.status,
-          };
-        }
-        default:
-          return { ...base, type: 'unknown' };
-      }
+      return normalizeStripeEvent(event);
     },
 
     async createSubscription(
@@ -237,8 +296,7 @@ function createStripeGateway(config: GatewayConfig): PaymentGateway {
       return {
         checkoutUrl: session.url ?? undefined,
         gatewaySubscriptionId: session.id,
-        clientSecret:
-          typeof session.client_secret === 'string' ? session.client_secret : undefined,
+        clientSecret: typeof session.client_secret === 'string' ? session.client_secret : undefined,
         raw: session,
       };
     },

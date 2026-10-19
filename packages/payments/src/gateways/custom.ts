@@ -146,6 +146,8 @@ function createCustomGateway(config: GatewayConfig): PaymentGateway {
         eventId: String(payload.eventId || payload.id || `${type}-${Date.now()}`),
         gatewayPaymentId: payload.gatewayPaymentId as string | undefined,
         gatewaySubscriptionId: payload.gatewaySubscriptionId as string | undefined,
+        subscriptionId:
+          typeof payload.subscriptionId === 'string' ? payload.subscriptionId : undefined,
         paymentId: payload.paymentId as string | undefined,
         amount: typeof payload.amount === 'number' ? payload.amount : undefined,
         currency: typeof payload.currency === 'string' ? payload.currency : undefined,
@@ -159,8 +161,7 @@ function createCustomGateway(config: GatewayConfig): PaymentGateway {
 export const customGatewayDefinition: PaymentGatewayDefinition = {
   id: 'custom',
   label: 'Custom',
-  description:
-    'HTTP escape hatch: POST create-checkout URL with a signed webhook callback',
+  description: 'HTTP escape hatch: POST create-checkout URL with a signed webhook callback',
   region: 'Any',
   ready: true,
   capabilities: {

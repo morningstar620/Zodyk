@@ -9,6 +9,7 @@ export interface IPaymentEvent extends Document {
   paymentId?: Types.ObjectId;
   payload: Record<string, unknown>;
   processedAt?: Date;
+  error?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,18 +23,18 @@ const paymentEventSchema = new Schema<IPaymentEvent>(
     paymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
     payload: { type: Schema.Types.Mixed, required: true, default: {} },
     processedAt: { type: Date },
+    error: { type: String },
   },
   { timestamps: true },
 );
 
 paymentEventSchema.index({ tenantId: 1, gateway: 1, eventId: 1 }, { unique: true });
 paymentEventSchema.index({ tenantId: 1, paymentId: 1, createdAt: -1 });
+paymentEventSchema.index({ tenantId: 1, createdAt: -1 });
 
 export type PaymentEventModel = Model<IPaymentEvent>;
 
-export function getPaymentEventModel(
-  mongoose: typeof import('mongoose'),
-): PaymentEventModel {
+export function getPaymentEventModel(mongoose: typeof import('mongoose')): PaymentEventModel {
   return (
     (mongoose.models.PaymentEvent as PaymentEventModel) ??
     mongoose.model<IPaymentEvent>('PaymentEvent', paymentEventSchema)

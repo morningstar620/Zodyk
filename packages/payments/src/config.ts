@@ -1,13 +1,9 @@
 import { decrypt, encrypt } from '@zodyk/auth/security/encryption';
 import { DEFAULT_TENANT_ID, type PaymentMode } from '@zodyk/core';
 import { connectDatabase, getModels } from '@zodyk/database';
-import { GatewayNotConfiguredError, GatewayNotFoundError } from './errors';
+import { GatewayNotConfiguredError, GatewayNotFoundError, PaymentsError } from './errors';
 import { registerBuiltinGateways } from './gateways';
-import {
-  createPaymentGateway,
-  getPaymentGatewayDefinition,
-  listPaymentGateways,
-} from './registry';
+import { createPaymentGateway, getPaymentGatewayDefinition, listPaymentGateways } from './registry';
 import type { GatewayConfig, GatewayId, PaymentGateway } from './types';
 import { maskSecret } from './utils';
 
@@ -117,9 +113,9 @@ function envConfig(): ResolvedPaymentsConfig | null {
   if (!activeGateway) return null;
   const credentials = envCredentialsFor(activeGateway);
   if (!credentials) return null;
-  const mode = (process.env.PAYMENTS_MODE?.trim().toLowerCase() === 'live'
-    ? 'live'
-    : 'test') as PaymentMode;
+  const mode = (
+    process.env.PAYMENTS_MODE?.trim().toLowerCase() === 'live' ? 'live' : 'test'
+  ) as PaymentMode;
   return { activeGateway, mode, credentials, source: 'env' };
 }
 
@@ -136,9 +132,16 @@ async function dbConfig(): Promise<ResolvedPaymentsConfig | null> {
   const gatewayStore = payments.gateways
     ? payments.gateways instanceof Map
       ? payments.gateways.get(payments.activeGateway)
-      : (payments.gateways as Record<string, { secretsEncrypted?: string; publicFields?: Record<string, string> | Map<string, string>; configured?: boolean }>)[
-          payments.activeGateway
-        ]
+      : (
+          payments.gateways as Record<
+            string,
+            {
+              secretsEncrypted?: string;
+              publicFields?: Record<string, string> | Map<string, string>;
+              configured?: boolean;
+            }
+          >
+        )[payments.activeGateway]
     : undefined;
 
   if (!gatewayStore?.configured && !gatewayStore?.secretsEncrypted && !gatewayStore?.publicFields) {
@@ -184,9 +187,7 @@ export function clearPaymentsConfigCache(): void {
   cachedConfig = undefined;
 }
 
-export async function requirePaymentsConfig(
-  gatewayId?: string,
-): Promise<ResolvedPaymentsConfig> {
+export async function requirePaymentsConfig(gatewayId?: string): Promise<ResolvedPaymentsConfig> {
   const config = await getPaymentsConfig();
   if (!config) throw new GatewayNotConfiguredError(gatewayId);
   if (gatewayId && config.activeGateway !== gatewayId) {
@@ -218,9 +219,15 @@ async function resolveGatewayCredentials(
   const store = settings?.payments?.gateways
     ? settings.payments.gateways instanceof Map
       ? settings.payments.gateways.get(gatewayId)
-      : (settings.payments.gateways as Record<string, { secretsEncrypted?: string; publicFields?: Record<string, string> | Map<string, string> }>)[
-          gatewayId
-        ]
+      : (
+          settings.payments.gateways as Record<
+            string,
+            {
+              secretsEncrypted?: string;
+              publicFields?: Record<string, string> | Map<string, string>;
+            }
+          >
+        )[gatewayId]
     : undefined;
   if (!store) return null;
 
@@ -251,7 +258,10 @@ export async function getActivePaymentGateway(
 
   const gatewayConfig: GatewayConfig = {
     mode: config.mode,
-    credentials: config.activeGateway === id ? config.credentials : (await resolveGatewayCredentials(id, config.mode))?.credentials || config.credentials,
+    credentials:
+      config.activeGateway === id
+        ? config.credentials
+        : (await resolveGatewayCredentials(id, config.mode))?.credentials || config.credentials,
   };
 
   if (gatewayId && gatewayId !== config.activeGateway) {
@@ -272,9 +282,7 @@ export function encryptGatewayCredentials(
 ): { secretsEncrypted?: string; publicFields: Record<string, string> } {
   const definition = getPaymentGatewayDefinition(definitionId);
   const secretKeys = new Set(
-    (definition?.credentialFields || [])
-      .filter((f) => f.secret)
-      .map((f) => f.key),
+    (definition?.credentialFields || []).filter((f) => f.secret).map((f) => f.key),
   );
 
   const secrets: Record<string, string> = {};
@@ -315,9 +323,15 @@ export async function savePaymentsSettings(input: {
   const existingStore = existingPayments?.gateways
     ? existingPayments.gateways instanceof Map
       ? existingPayments.gateways.get(input.gateway)
-      : (existingPayments.gateways as Record<string, { secretsEncrypted?: string; publicFields?: Map<string, string> | Record<string, string> }>)[
-          input.gateway
-        ]
+      : (
+          existingPayments.gateways as Record<
+            string,
+            {
+              secretsEncrypted?: string;
+              publicFields?: Map<string, string> | Record<string, string>;
+            }
+          >
+        )[input.gateway]
     : undefined;
 
   let secrets: Record<string, string> = {};
@@ -360,8 +374,16 @@ export async function savePaymentsSettings(input: {
   );
 
   const mode = input.mode || existingPayments?.mode || 'test';
-  const activeGateway =
-    input.activeGateway || existingPayments?.activeGateway || input.gateway;
+  const activeGateway = input.activeGateway || existingPayments?.activeGateway || input.gateway;
+  const activeDefinition = getPaymentGatewayDefinition(activeGateway);
+  if (!activeDefinition) throw new GatewayNotFoundError(activeGateway);
+  if (!activeDefinition.ready) {
+    throw new PaymentsError(
+      `Payment gateway "${activeGateway}" is not implemented and cannot be set as the active gateway.`,
+      'GATEWAY_NOT_READY',
+      400,
+    );
+  }
 
   await PlatformSettings.findOneAndUpdate(
     { tenantId: DEFAULT_TENANT_ID },
@@ -409,10 +431,7 @@ export async function getPaymentsSettingsPublic() {
       mode: env.mode,
       gateways,
       credentials: Object.fromEntries(
-        Object.entries(env.credentials).map(([k, v]) => [
-          k,
-          isSecretField(k) ? maskSecret(v) : v,
-        ]),
+        Object.entries(env.credentials).map(([k, v]) => [k, isSecretField(k) ? maskSecret(v) : v]),
       ),
     };
   }
@@ -441,9 +460,15 @@ export async function getPaymentsSettingsPublic() {
     const store =
       payments.gateways instanceof Map
         ? payments.gateways.get(activeGateway)
-        : (payments.gateways as Record<string, { secretsEncrypted?: string; publicFields?: Record<string, string> | Map<string, string> }>)[
-            activeGateway
-          ];
+        : (
+            payments.gateways as Record<
+              string,
+              {
+                secretsEncrypted?: string;
+                publicFields?: Record<string, string> | Map<string, string>;
+              }
+            >
+          )[activeGateway];
     if (store) {
       const publicFields =
         store.publicFields instanceof Map
