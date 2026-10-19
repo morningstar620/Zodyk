@@ -101,6 +101,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleSlug, string[]> = {
     'users:*',
     PERMISSIONS.ROLES_READ,
     'pages:*',
+    'media:*',
     'meta_objects:*',
     'meta_entries:*',
     'system_entities:*',
