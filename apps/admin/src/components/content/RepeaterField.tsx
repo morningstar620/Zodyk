@@ -2,6 +2,7 @@
 
 import type { MetaFieldDefinition } from '@zodyk/core';
 import { Button } from '@zodyk/shared-ui';
+import type { EntityTargetOption } from './entity-targets';
 import { DynamicFieldRenderer } from './DynamicFieldRenderer';
 import { getNestedValue, setNestedValue } from './utils';
 
@@ -11,6 +12,7 @@ interface RepeaterFieldProps {
   onChange: (value: Record<string, unknown>[]) => void;
   allFields: MetaFieldDefinition[];
   metaObjects?: { slug: string; name: string }[];
+  entityTargets?: EntityTargetOption[];
 }
 
 export function RepeaterField({
@@ -19,6 +21,7 @@ export function RepeaterField({
   onChange,
   allFields,
   metaObjects,
+  entityTargets,
 }: RepeaterFieldProps) {
   const subFields = field.settings?.repeater?.fields ?? [];
   const items = Array.isArray(value) ? value : [];
@@ -44,15 +47,19 @@ export function RepeaterField({
             </Button>
           </div>
           <div className="flex flex-col gap-4">
+            {subFields.length === 0 && (
+              <p className="text-sm text-zinc-500">No fields configured for this repeater.</p>
+            )}
             {subFields.map((subField) => (
               <DynamicFieldRenderer
                 key={`${index}-${subField.key}`}
                 field={subField}
                 value={getNestedValue(item as Record<string, unknown>, subField.key)}
                 onChange={(v) => updateItem(index, subField.key, v)}
-                allFields={allFields}
+                allFields={subFields.length > 0 ? subFields : allFields}
                 formData={item as Record<string, unknown>}
                 metaObjects={metaObjects}
+                entityTargets={entityTargets}
               />
             ))}
           </div>

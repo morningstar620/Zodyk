@@ -25,6 +25,8 @@ export interface RouteMetaDefinition {
   };
   templates?: {
     templateKey?: string;
+    archiveTemplateKey?: string;
+    singleTemplateKey?: string;
   };
   display?: {
     archivePageSize?: number;
@@ -50,7 +52,20 @@ export interface ResolvedRoute {
   metaEntry?: RouteMetaEntry;
   metaEntries?: RouteMetaEntry[];
   pagination?: { page: number; pageSize: number; total: number };
+  /** Theme template key chosen from the definition for this meta view. */
+  metaTemplateKey?: string;
   slugSegments: string[];
+}
+
+export function metaTemplateKeyFor(
+  def: RouteMetaDefinition,
+  view: 'meta_archive' | 'meta_single',
+): string {
+  const templates = def.templates ?? {};
+  if (view === 'meta_archive') {
+    return templates.archiveTemplateKey || templates.templateKey || def.slug;
+  }
+  return templates.singleTemplateKey || templates.templateKey || def.slug;
 }
 
 function splitPath(path: string): string[] {
@@ -133,6 +148,7 @@ async function resolveRouteInternal(
           metaDefinition: def,
           metaEntries: result.items,
           pagination: { page, pageSize, total: result.total },
+          metaTemplateKey: metaTemplateKeyFor(def, 'meta_archive'),
           slugSegments: segments,
         };
       }
@@ -146,6 +162,7 @@ async function resolveRouteInternal(
           view: 'meta_single',
           metaDefinition: def,
           metaEntry: entry,
+          metaTemplateKey: metaTemplateKeyFor(def, 'meta_single'),
           slugSegments: segments,
         };
       }

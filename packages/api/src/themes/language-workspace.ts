@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID, publicPathsById } from '@zodyk/core';
+import { DEFAULT_TENANT_ID, PUBLIC_META_OBJECT_STATUS, publicPathsById } from '@zodyk/core';
 import { connectDatabase, getModels, getSystemEntityRepository } from '@zodyk/database';
 import {
   getThemeHealth,
@@ -40,7 +40,7 @@ async function loadTenantCatalog(tenantId: string): Promise<TenantCatalog> {
 
   const [pageDocs, metaObjects, menus, systemEntities] = await Promise.all([
     Page.find({ tenantId }).select('title slug parentId templateSuffix status').lean(),
-    MetaObjectDefinition.find({ tenantId, status: 'active' }).lean(),
+    MetaObjectDefinition.find({ tenantId, status: PUBLIC_META_OBJECT_STATUS }).lean(),
     Menu.find({ tenantId }).lean(),
     systemRepo.listDefinitions(tenantId),
   ]);
