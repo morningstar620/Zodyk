@@ -240,9 +240,17 @@ export async function renderSitePage(
     resourceId = route.page._id.toString();
     resourceType = 'page';
   } else if (route.view === 'meta_archive' && route.metaDefinition) {
-    metaTemplateKey = route.metaDefinition.templates?.templateKey ?? route.metaDefinition.slug;
+    metaTemplateKey =
+      route.metaTemplateKey ??
+      route.metaDefinition.templates?.archiveTemplateKey ??
+      route.metaDefinition.templates?.templateKey ??
+      route.metaDefinition.slug;
   } else if (route.view === 'meta_single' && route.metaDefinition && route.metaEntry) {
-    metaTemplateKey = route.metaDefinition.templates?.templateKey ?? route.metaDefinition.slug;
+    metaTemplateKey =
+      route.metaTemplateKey ??
+      route.metaDefinition.templates?.singleTemplateKey ??
+      route.metaDefinition.templates?.templateKey ??
+      route.metaDefinition.slug;
     metaEntryTemplateSuffix = route.metaEntry.templateSuffix;
     resourceId = route.metaEntry._id.toString();
     resourceType = 'meta_entry';

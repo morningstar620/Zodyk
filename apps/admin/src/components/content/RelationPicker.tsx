@@ -8,6 +8,8 @@ interface RelationPickerProps {
   cardinality: 'one' | 'many';
   value: string | string[] | undefined;
   onChange: (value: string | string[]) => void;
+  listUrl?: string;
+  inputName?: string;
 }
 
 interface EntryOption {
@@ -20,28 +22,30 @@ export function RelationPicker({
   cardinality,
   value,
   onChange,
+  listUrl,
+  inputName,
 }: RelationPickerProps) {
   const [options, setOptions] = useState<EntryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const selected = cardinality === 'many' ? (Array.isArray(value) ? value : []) : value ? [value as string] : [];
+  const selected =
+    cardinality === 'many' ? (Array.isArray(value) ? value : []) : value ? [value as string] : [];
 
   useEffect(() => {
-    fetch(`/api/v1/meta-objects/${targetSlug}/entries?limit=50`)
+    fetch(listUrl ?? `/api/v1/meta-objects/${targetSlug}/entries?limit=50`)
       .then((r) => r.json())
       .then((data) => {
         const entries = (data.data ?? []) as { id: string; data: Record<string, unknown> }[];
         setOptions(
           entries.map((e) => ({
             id: e.id,
-            label:
-              String(
-                e.data.title ??
-                  e.data.name ??
-                  e.data.quote ??
-                  Object.values(e.data).find((v) => typeof v === 'string') ??
-                  e.id,
-              ),
+            label: String(
+              e.data.title ??
+                e.data.name ??
+                e.data.quote ??
+                Object.values(e.data).find((v) => typeof v === 'string') ??
+                e.id,
+            ),
           })),
         );
         setLoading(false);
@@ -50,7 +54,7 @@ export function RelationPicker({
         setOptions([]);
         setLoading(false);
       });
-  }, [targetSlug]);
+  }, [targetSlug, listUrl]);
 
   const filtered = options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()));
 
@@ -90,7 +94,7 @@ export function RelationPicker({
             >
               <input
                 type={cardinality === 'many' ? 'checkbox' : 'radio'}
-                name={`relation-${targetSlug}`}
+                name={inputName ?? `relation-${targetSlug}`}
                 checked={selected.includes(option.id)}
                 onChange={() => toggle(option.id)}
               />

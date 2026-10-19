@@ -1,5 +1,6 @@
 import {
   DEFAULT_TENANT_ID,
+  PUBLIC_META_OBJECT_STATUS,
   auditThemeHealth,
   publicPathsById,
   templateJsonSchema,
@@ -825,7 +826,7 @@ export async function getCustomizerBootstrap(
 
   const [pages, metaObjects] = await Promise.all([
     Page.find({ tenantId }).select('title slug parentId templateSuffix status').lean(),
-    MetaObjectDefinition.find({ tenantId, status: 'active' }).lean(),
+    MetaObjectDefinition.find({ tenantId, status: PUBLIC_META_OBJECT_STATUS }).lean(),
   ]);
   const pagePaths = publicPathsById(
     pages.map((page) => ({
@@ -998,7 +999,7 @@ export async function getThemeHealth(
 
   const metaObjects =
     options?.metaObjects ??
-    (await MetaObjectDefinition.find({ tenantId, status: 'active' }).lean());
+    (await MetaObjectDefinition.find({ tenantId, status: PUBLIC_META_OBJECT_STATUS }).lean());
   const issues = auditThemeHealth({
     themeFiles: filePaths,
     metaObjects: metaObjects.map((m) => ({

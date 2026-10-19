@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { MetaEntryForm } from '@/components/content/MetaEntryForm';
+import type { EntityTargetOption } from '@/components/content/entity-targets';
+import { useActiveContentLocale } from '@/components/content/use-content-locales';
 import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import {
   createSystemRecord,
@@ -29,6 +31,8 @@ export default function NewSystemRecordPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metaObjects, setMetaObjects] = useState<{ slug: string; name: string }[]>([]);
+  const [entityTargets, setEntityTargets] = useState<EntityTargetOption[]>([]);
+  const { locales, defaultLocale, activeLocale, setActiveLocale } = useActiveContentLocale();
 
   useEffect(() => {
     Promise.all([fetchSystemEntity(slug), fetchEntityTargets()]).then(([entity, targets]) => {
@@ -36,11 +40,11 @@ export default function NewSystemRecordPage() {
       setSingularLabel(entity.singularLabel);
       setFieldGroups(entity.fieldGroups ?? []);
       setFields(entity.fields ?? []);
+      setEntityTargets(targets);
       setMetaObjects(
-        targets.map((t) => ({
-          slug: t.slug,
-          name: t.name,
-        })),
+        targets
+          .filter((target) => target.category === 'meta_object')
+          .map((target) => ({ slug: target.slug, name: target.name })),
       );
       setLoading(false);
     });
@@ -97,11 +101,13 @@ export default function NewSystemRecordPage() {
             fields={fields}
             data={data}
             translations={{}}
-            defaultLocale="en"
-            activeLocale="en"
-            onLocaleChange={() => {}}
+            locales={locales}
+            defaultLocale={defaultLocale}
+            activeLocale={activeLocale}
+            onLocaleChange={setActiveLocale}
             onChange={(d) => setData(d)}
             metaObjects={metaObjects}
+            entityTargets={entityTargets}
           />
         </div>
         <Card>
@@ -109,7 +115,10 @@ export default function NewSystemRecordPage() {
             <CardTitle>Record settings</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={status} onChange={(e) => setStatus(e.target.value as 'active' | 'draft')}>
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'draft')}
+            >
               <option value="active">Active</option>
               <option value="draft">Draft</option>
             </Select>

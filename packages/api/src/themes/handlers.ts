@@ -1,6 +1,7 @@
 import {
   DEFAULT_TENANT_ID,
   listPageTemplates,
+  PUBLIC_META_OBJECT_STATUS,
   publicPathsById,
   sectionInstanceSchema,
   templateCustomizationSchema,
@@ -161,7 +162,10 @@ async function buildPreviewContextUncached(
 
   const [pages, metaDefinitions] = await Promise.all([
     Page.find({ tenantId: DEFAULT_TENANT_ID, status: 'published' }).lean(),
-    MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' }).lean(),
+    MetaObjectDefinition.find({
+      tenantId: DEFAULT_TENANT_ID,
+      status: PUBLIC_META_OBJECT_STATUS,
+    }).lean(),
   ]);
 
   const route = await resolveRoute(pathname, {
@@ -251,7 +255,13 @@ async function buildPreviewContextUncached(
         : undefined,
     },
     pageTemplateSuffix: route.page?.templateSuffix,
-    metaTemplateKey: route.metaDefinition?.templates?.templateKey ?? route.metaDefinition?.slug,
+    metaTemplateKey:
+      route.metaTemplateKey ??
+      (route.view === 'meta_archive'
+        ? route.metaDefinition?.templates?.archiveTemplateKey
+        : route.metaDefinition?.templates?.singleTemplateKey) ??
+      route.metaDefinition?.templates?.templateKey ??
+      route.metaDefinition?.slug,
     metaEntryTemplateSuffix: route.metaEntry?.templateSuffix,
     view: route.view,
   };
@@ -831,7 +841,10 @@ export async function listThemePagesHandler(session: AuthSession | null) {
     Page.find({ tenantId: DEFAULT_TENANT_ID })
       .select('title slug parentId templateSuffix status')
       .lean(),
-    MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' }).lean(),
+    MetaObjectDefinition.find({
+      tenantId: DEFAULT_TENANT_ID,
+      status: PUBLIC_META_OBJECT_STATUS,
+    }).lean(),
     loadActiveTheme(DEFAULT_TENANT_ID),
   ]);
   const pagePaths = publicPathsById(

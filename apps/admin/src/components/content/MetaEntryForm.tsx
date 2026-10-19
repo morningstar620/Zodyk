@@ -1,13 +1,15 @@
 'use client';
 
 import {
+  defaultLocalizationSettings,
   mergeLocalizedData,
   SEO_GROUP_KEY,
   type MetaFieldDefinition,
   type MetaFieldGroup,
 } from '@zodyk/core';
 import { DynamicFieldRenderer, getFieldValue } from './DynamicFieldRenderer';
-import { groupFieldsByGroup, setNestedValue, SUPPORTED_LOCALES } from './utils';
+import type { EntityTargetOption } from './entity-targets';
+import { groupFieldsByGroup, setNestedValue } from './utils';
 import { LocaleTabs } from './LocaleTabs';
 
 interface MetaEntryFormProps {
@@ -18,8 +20,13 @@ interface MetaEntryFormProps {
   defaultLocale: string;
   activeLocale: string;
   onLocaleChange: (locale: string) => void;
-  onChange: (data: Record<string, unknown>, translations: Record<string, Record<string, unknown>>) => void;
+  onChange: (
+    data: Record<string, unknown>,
+    translations: Record<string, Record<string, unknown>>,
+  ) => void;
   metaObjects?: { slug: string; name: string }[];
+  entityTargets?: EntityTargetOption[];
+  locales?: readonly string[];
 }
 
 export function MetaEntryForm({
@@ -32,6 +39,8 @@ export function MetaEntryForm({
   onLocaleChange,
   onChange,
   metaObjects,
+  entityTargets,
+  locales = defaultLocalizationSettings().locales,
 }: MetaEntryFormProps) {
   const mergedData = mergeLocalizedData(defaultLocale, data, translations, activeLocale);
   const nonSeoGroups = fieldGroups
@@ -56,14 +65,12 @@ export function MetaEntryForm({
   };
 
   const currentFormData =
-    activeLocale === defaultLocale
-      ? data
-      : { ...data, ...(translations[activeLocale] ?? {}) };
+    activeLocale === defaultLocale ? data : { ...data, ...(translations[activeLocale] ?? {}) };
 
   return (
     <div className="flex flex-col gap-6">
       <LocaleTabs
-        locales={SUPPORTED_LOCALES}
+        locales={locales}
         activeLocale={activeLocale}
         defaultLocale={defaultLocale}
         onChange={onLocaleChange}
@@ -89,6 +96,7 @@ export function MetaEntryForm({
                       allFields={fields}
                       formData={currentFormData}
                       metaObjects={metaObjects}
+                      entityTargets={entityTargets}
                     />
                   );
                 }
@@ -102,6 +110,7 @@ export function MetaEntryForm({
                       allFields={fields}
                       formData={currentFormData}
                       metaObjects={metaObjects}
+                      entityTargets={entityTargets}
                     />
                   );
                 }
@@ -116,6 +125,7 @@ export function MetaEntryForm({
                     allFields={fields}
                     formData={currentFormData}
                     metaObjects={metaObjects}
+                    entityTargets={entityTargets}
                   />
                 );
               })}
@@ -132,10 +142,17 @@ export function MetaEntryForm({
               <DynamicFieldRenderer
                 key={field.key}
                 field={field}
-                value={getFieldValue(activeLocale === defaultLocale ? data : { ...data, ...(translations[activeLocale] ?? {}) }, field)}
+                value={getFieldValue(
+                  activeLocale === defaultLocale
+                    ? data
+                    : { ...data, ...(translations[activeLocale] ?? {}) },
+                  field,
+                )}
                 onChange={(v) => handleFieldChange(field.key, v)}
                 allFields={fields}
                 formData={currentFormData}
+                metaObjects={metaObjects}
+                entityTargets={entityTargets}
               />
             ))}
           </div>

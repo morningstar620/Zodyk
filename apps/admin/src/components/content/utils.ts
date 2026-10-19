@@ -44,9 +44,5 @@ export function groupFieldsByGroup(
   fields: MetaFieldDefinition[],
   groupKey: string,
 ): MetaFieldDefinition[] {
-  return fields
-    .filter((f) => f.group === groupKey)
-    .sort((a, b) => a.order - b.order);
+  return fields.filter((f) => f.group === groupKey).sort((a, b) => a.order - b.order);
 }
-
-export const SUPPORTED_LOCALES = ['en', 'fr', 'es', 'de'] as const;

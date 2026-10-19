@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
+import { DEFAULT_TENANT_ID, PUBLIC_META_OBJECT_STATUS } from '@zodyk/core';
 import {
   connectDatabase,
   findNextScheduledAt,
@@ -40,7 +40,10 @@ async function loadPages() {
 
 async function loadMetaDefinitions() {
   const { MetaObjectDefinition } = getModels();
-  return MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' }).lean();
+  return MetaObjectDefinition.find({
+    tenantId: DEFAULT_TENANT_ID,
+    status: PUBLIC_META_OBJECT_STATUS,
+  }).lean();
 }
 
 async function loadMenus() {

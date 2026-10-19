@@ -1,6 +1,7 @@
 import {
   createMenuSchema,
   DEFAULT_TENANT_ID,
+  PUBLIC_META_OBJECT_STATUS,
   paginationSchema,
   publicPathsById,
   titleToHandle,
@@ -280,7 +281,7 @@ export async function searchLinkTargets(
 
     const metaDefs = await MetaObjectDefinition.find({
       tenantId: DEFAULT_TENANT_ID,
-      status: 'active',
+      status: PUBLIC_META_OBJECT_STATUS,
     })
       .sort({ name: 1 })
       .lean();
@@ -408,7 +409,7 @@ export async function searchLinkTargets(
     const def = await MetaObjectDefinition.findOne({
       tenantId: DEFAULT_TENANT_ID,
       slug,
-      status: 'active',
+      status: PUBLIC_META_OBJECT_STATUS,
     }).lean();
 
     if (!def) {

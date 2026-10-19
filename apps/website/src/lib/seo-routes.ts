@@ -1,4 +1,4 @@
-import { DEFAULT_TENANT_ID } from '@zodyk/core';
+import { DEFAULT_TENANT_ID, PUBLIC_META_OBJECT_STATUS } from '@zodyk/core';
 import { connectDatabase, getModels } from '@zodyk/database';
 import {
   buildRobotsTxt,
@@ -25,7 +25,7 @@ export async function sitemapResponse(): Promise<NextResponse> {
     Page.find({ tenantId: DEFAULT_TENANT_ID, status: 'published' })
       .select('slug updatedAt seo status')
       .lean(),
-    MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: 'active' })
+    MetaObjectDefinition.find({ tenantId: DEFAULT_TENANT_ID, status: PUBLIC_META_OBJECT_STATUS })
       .select('slug routing status')
       .lean(),
     MetaObjectEntry.find({

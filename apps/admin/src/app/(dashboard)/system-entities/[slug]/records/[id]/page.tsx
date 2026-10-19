@@ -2,11 +2,22 @@
 
 import type { MetaFieldDefinition, MetaFieldGroup } from '@zodyk/core';
 import { generateRecordLabel } from '@zodyk/core';
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Select } from '@zodyk/shared-ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Select,
+} from '@zodyk/shared-ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { MetaEntryForm } from '@/components/content/MetaEntryForm';
+import type { EntityTargetOption } from '@/components/content/entity-targets';
+import { useActiveContentLocale } from '@/components/content/use-content-locales';
 import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import {
   fetchEntityTargets,
@@ -31,30 +42,38 @@ export default function EditSystemRecordPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metaObjects, setMetaObjects] = useState<{ slug: string; name: string }[]>([]);
+  const [entityTargets, setEntityTargets] = useState<EntityTargetOption[]>([]);
+  const { locales, defaultLocale, activeLocale, setActiveLocale } = useActiveContentLocale();
 
   useEffect(() => {
-    Promise.all([
-      fetchSystemEntity(slug),
-      fetchSystemRecord(slug, id),
-      fetchEntityTargets(),
-    ]).then(([entity, record, targets]) => {
-      setEntityName(entity.name);
-      setFieldGroups(entity.fieldGroups ?? []);
-      setFields(entity.fields ?? []);
-      setData(record.data ?? {});
-      setStatus(record.status);
-      setUpdatedAt(record.updatedAt);
-      setCreatedAt(record.createdAt);
-      setMetaObjects(targets.map((t) => ({ slug: t.slug, name: t.name })));
-      setLoading(false);
-    });
+    Promise.all([fetchSystemEntity(slug), fetchSystemRecord(slug, id), fetchEntityTargets()]).then(
+      ([entity, record, targets]) => {
+        setEntityName(entity.name);
+        setFieldGroups(entity.fieldGroups ?? []);
+        setFields(entity.fields ?? []);
+        setData(record.data ?? {});
+        setStatus(record.status);
+        setUpdatedAt(record.updatedAt);
+        setCreatedAt(record.createdAt);
+        setEntityTargets(targets);
+        setMetaObjects(
+          targets
+            .filter((target) => target.category === 'meta_object')
+            .map((target) => ({ slug: target.slug, name: target.name })),
+        );
+        setLoading(false);
+      },
+    );
   }, [slug, id]);
 
   async function save() {
     setSaving(true);
     setError(null);
     try {
-      await updateSystemRecord(slug, id, { status: status as 'active' | 'draft' | 'archived', data });
+      await updateSystemRecord(slug, id, {
+        status: status as 'active' | 'draft' | 'archived',
+        data,
+      });
       setSaving(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save record');
@@ -96,11 +115,13 @@ export default function EditSystemRecordPage() {
             fields={fields}
             data={data}
             translations={{}}
-            defaultLocale="en"
-            activeLocale="en"
-            onLocaleChange={() => {}}
+            locales={locales}
+            defaultLocale={defaultLocale}
+            activeLocale={activeLocale}
+            onLocaleChange={setActiveLocale}
             onChange={(d) => setData(d)}
             metaObjects={metaObjects}
+            entityTargets={entityTargets}
           />
         </div>
         <Card>
@@ -110,10 +131,7 @@ export default function EditSystemRecordPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="text-xs text-muted-foreground">Status</p>
-              <Select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
+              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
                 <option value="archived">Archived</option>
