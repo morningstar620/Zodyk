@@ -121,13 +121,27 @@ import {
 import {
   cancelSubscriptionHandler,
   createPaymentHandler,
+  createPriceHandler,
+  createProductHandler,
   createSubscriptionHandler,
+  downloadInvoiceHandler,
   getPaymentHandler,
+  getPaymentLinkHandler,
+  getPaymentMetricsHandler,
   getPaymentsSettingsHandler,
+  getProductHandler,
+  getSubscriptionHandler,
+  listPaymentEventsHandler,
   listPaymentsHandler,
+  listPricesHandler,
+  listProductsHandler,
+  listSubscriptionsHandler,
   paymentsWebhookHandler,
   refundPaymentHandler,
+  startPaymentLinkCheckoutHandler,
   updatePaymentsSettingsHandler,
+  updatePriceHandler,
+  updateProductHandler,
 } from '@zodyk/api/payments';
 import { getMediaSettings, updateMediaSettings } from '@zodyk/api/settings';
 import { Router } from 'express';
@@ -996,6 +1010,7 @@ export function createV1Router(): Router {
   });
 
   // —— Payments ——
+  // Static segments are registered before /payments/:id so Express does not treat them as ids.
   mount(router, 'get', '/payments', async (request) => {
     try {
       const session = await getApiSession(request);
@@ -1017,22 +1032,19 @@ export function createV1Router(): Router {
     }
   });
 
-  mount(router, 'get', '/payments/:id', async (request, params) => {
+  mount(router, 'get', '/payments/metrics', async (request) => {
     try {
       const session = await getApiSession(request);
-      return Response.json(await getPaymentHandler(session, requireParam(params, 'id')));
+      return Response.json(await getPaymentMetricsHandler(session));
     } catch (error) {
       return handleApiError(error);
     }
   });
 
-  mount(router, 'post', '/payments/:id/refund', async (request, params) => {
+  mount(router, 'get', '/payments/subscriptions', async (request) => {
     try {
       const session = await getApiSession(request);
-      const body = await request.json().catch(() => ({}));
-      return Response.json(
-        await refundPaymentHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
-      );
+      return Response.json(await listSubscriptionsHandler(session, queryParams(request)));
     } catch (error) {
       return handleApiError(error);
     }
@@ -1050,11 +1062,163 @@ export function createV1Router(): Router {
     }
   });
 
+  mount(router, 'get', '/payments/subscriptions/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await getSubscriptionHandler(session, requireParam(params, 'id')));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
   mount(router, 'post', '/payments/subscriptions/:id/cancel', async (request, params) => {
     try {
       const session = await getApiSession(request);
       return Response.json(
         await cancelSubscriptionHandler(session, requireParam(params, 'id'), getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/products', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listProductsHandler(session));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/payments/products', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(await createProductHandler(session, body, getClientIp(request)), {
+        status: 201,
+      });
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/products/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await getProductHandler(session, requireParam(params, 'id')));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'patch', '/payments/products/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(
+        await updateProductHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/prices', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listPricesHandler(session, queryParams(request)));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/payments/prices', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(await createPriceHandler(session, body, getClientIp(request)), {
+        status: 201,
+      });
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'patch', '/payments/prices/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(
+        await updatePriceHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/events', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await listPaymentEventsHandler(session, queryParams(request)));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/links/:token', async (_request, params) => {
+    try {
+      return Response.json(await getPaymentLinkHandler(requireParam(params, 'token')));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/payments/links/:token/checkout', async (request, params) => {
+    try {
+      const body = await request.json();
+      return Response.json(
+        await startPaymentLinkCheckoutHandler(requireParam(params, 'token'), body),
+        { status: 201 },
+      );
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/invoices/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return await downloadInvoiceHandler(session, requireParam(params, 'id'));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/:id/invoice', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return await downloadInvoiceHandler(session, requireParam(params, 'id'));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'get', '/payments/:id', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await getPaymentHandler(session, requireParam(params, 'id')));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'post', '/payments/:id/refund', async (request, params) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json().catch(() => ({}));
+      return Response.json(
+        await refundPaymentHandler(session, requireParam(params, 'id'), body, getClientIp(request)),
       );
     } catch (error) {
       return handleApiError(error);

@@ -16,6 +16,8 @@ import { getMenuModel } from './models/menu';
 import { getPageModel } from './models/page';
 import { getPaymentModel } from './models/payment';
 import { getPaymentEventModel } from './models/payment-event';
+import { getPriceModel } from './models/price';
+import { getProductModel } from './models/product';
 import { getPlatformSettingsModel } from './models/platform-settings';
 import { getRedirectModel } from './models/redirect';
 import { getRoleModel } from './models/role';
@@ -75,6 +77,8 @@ export function getModels() {
     Payment: getPaymentModel(mongoose),
     PaymentEvent: getPaymentEventModel(mongoose),
     SubscriptionIntent: getSubscriptionIntentModel(mongoose),
+    Product: getProductModel(mongoose),
+    Price: getPriceModel(mongoose),
   };
 }
 
@@ -109,3 +113,5 @@ export * from './models/template-customization';
 export * from './models/payment';
 export * from './models/payment-event';
 export * from './models/subscription-intent';
+export * from './models/product';
+export * from './models/price';
