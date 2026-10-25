@@ -17,11 +17,11 @@
   "dependencies": {
     "@zodyk/core": "workspace:*",
     "@zodyk/liquid": "workspace:*",
-    "liquidjs": "^10.21.0",
+    "liquidjs": "^10.27.2",
     "zod": "^3.25.51"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   }
 }
