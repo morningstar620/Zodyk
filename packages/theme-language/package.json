@@ -18,7 +18,7 @@
     "@zodyk/core": "workspace:*",
     "@zodyk/liquid": "workspace:*",
     "liquidjs": "^10.27.2",
-    "zod": "^3.25.51"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

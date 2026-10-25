@@ -2,14 +2,14 @@ import { z } from 'zod';
 
 export const blockInstanceSchema = z.object({
   type: z.string().min(1),
-  settings: z.record(z.unknown()).default({}),
+  settings: z.record(z.string(), z.unknown()).default({}),
   custom_css: z.string().optional(),
 });
 
 export const sectionInstanceSchema = z.object({
   type: z.string().min(1),
-  settings: z.record(z.unknown()).default({}),
-  blocks: z.record(blockInstanceSchema).optional(),
+  settings: z.record(z.string(), z.unknown()).default({}),
+  blocks: z.record(z.string(), blockInstanceSchema).optional(),
   block_order: z.array(z.string()).optional(),
   custom_css: z.string().optional(),
 });
@@ -17,19 +17,19 @@ export const sectionInstanceSchema = z.object({
 export const templateJsonSchema = z.object({
   name: z.string().optional(),
   wrapper: z.string().optional(),
-  sections: z.record(sectionInstanceSchema).default({}),
+  sections: z.record(z.string(), sectionInstanceSchema).default({}),
   order: z.array(z.string()).default([]),
 });
 
 export const sectionOverrideSchema = sectionInstanceSchema.partial().extend({
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const templateCustomizationSchema = z.object({
   resourceType: z.enum(['page', 'meta_entry']),
   resourceId: z.string().min(1),
   templateKey: z.string().min(1),
-  sectionOverrides: z.record(sectionOverrideSchema).default({}),
+  sectionOverrides: z.record(z.string(), sectionOverrideSchema).default({}),
 });
 
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;

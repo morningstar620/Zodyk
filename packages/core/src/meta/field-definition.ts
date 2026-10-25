@@ -70,7 +70,7 @@ const fieldSettingsSchema = z.object({
   rows: z.number().int().min(1).optional(),
 });
 
-export const metaFieldDefinitionSchema: z.ZodType<MetaFieldDefinition, z.ZodTypeDef, unknown> = z.lazy(() =>
+export const metaFieldDefinitionSchema: z.ZodType<MetaFieldDefinition> = z.lazy(() =>
   z.object({
     key: z
       .string()
@@ -103,7 +103,7 @@ export const metaFieldDefinitionSchema: z.ZodType<MetaFieldDefinition, z.ZodType
       })
       .optional(),
     order: z.number().int().min(0).default(0),
-  }),
+  }) as z.ZodType<MetaFieldDefinition>,
 );
 
 export const metaFieldGroupSchema = z.object({

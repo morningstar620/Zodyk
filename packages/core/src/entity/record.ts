@@ -4,12 +4,12 @@ export const systemRecordStatusSchema = z.enum(['active', 'archived', 'draft']);
 
 export const createSystemRecordSchema = z.object({
   status: systemRecordStatusSchema.default('active'),
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
 });
 
 export const updateSystemRecordSchema = z.object({
   status: systemRecordStatusSchema.optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const bulkSystemRecordIdsSchema = z.object({

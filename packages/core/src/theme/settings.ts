@@ -8,7 +8,7 @@ export const themeSettingsGroupSchema = z.object({
 
 export const themeSettingsSchemaSchema = z.array(themeSettingsGroupSchema);
 
-export const themeSettingsValuesSchema = z.record(z.unknown());
+export const themeSettingsValuesSchema = z.record(z.string(), z.unknown());
 
 export type ThemeSettingsGroup = z.infer<typeof themeSettingsGroupSchema>;
 export type ThemeSettingsSchema = z.infer<typeof themeSettingsSchemaSchema>;

@@ -12,8 +12,8 @@ export const createMetaEntrySchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
   templateSuffix: z.string().max(50).optional(),
-  data: z.record(z.unknown()),
-  translations: z.record(z.string(), z.record(z.unknown())).optional(),
+  data: z.record(z.string(), z.unknown()),
+  translations: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   scheduledAt: z.string().datetime().optional(),
 });
 
@@ -27,8 +27,8 @@ export const updateMetaEntrySchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
   templateSuffix: z.string().max(50).nullable().optional(),
-  data: z.record(z.unknown()).optional(),
-  translations: z.record(z.string(), z.record(z.unknown())).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+  translations: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   scheduledAt: z.string().datetime().nullable().optional(),
 });
 

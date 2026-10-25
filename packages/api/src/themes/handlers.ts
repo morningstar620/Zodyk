@@ -101,8 +101,8 @@ const previewSchema = z.object({
   pathname: z.string().default('/'),
   templatePath: z.string().optional(),
   templateJson: templateJsonSchema.optional(),
-  themeSettings: z.record(z.unknown()).optional(),
-  sectionOverrides: z.record(z.record(z.unknown())).optional(),
+  themeSettings: z.record(z.string(), z.unknown()).optional(),
+  sectionOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   pageTemplateSuffix: z.string().optional(),
   metaTemplateKey: z.string().optional(),
   metaEntryTemplateSuffix: z.string().optional(),
@@ -132,7 +132,7 @@ const sectionRenderSchema = z.object({
   sectionId: z.string().min(1),
   instance: sectionInstanceSchema,
   pathname: z.string().default('/'),
-  themeSettings: z.record(z.unknown()).optional(),
+  themeSettings: z.record(z.string(), z.unknown()).optional(),
 });
 
 const PREVIEW_CONTEXT_TTL_MS = 30_000;
@@ -789,7 +789,7 @@ export async function updateThemeSettings(
   ip?: string,
 ) {
   const authSession = requirePermission(session, 'themes:update');
-  const values = z.record(z.unknown()).parse(body);
+  const values = z.record(z.string(), z.unknown()).parse(body);
   const theme = await loadActiveTheme(DEFAULT_TENANT_ID);
   if (!theme) throw new AuthError('No active theme', 404);
   const { settings, isLive } = await updateThemeSettingsForTheme(
@@ -809,7 +809,7 @@ export async function updateThemeSettingsById(
   ip?: string,
 ) {
   const authSession = requirePermission(session, 'themes:update');
-  const values = z.record(z.unknown()).parse(body);
+  const values = z.record(z.string(), z.unknown()).parse(body);
   const { settings, isLive } = await updateThemeSettingsForTheme(
     themeId,
     values,

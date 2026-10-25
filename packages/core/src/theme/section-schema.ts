@@ -64,12 +64,12 @@ export const sectionBlockSchema = z.object({
 
 export const sectionPresetSchema = z.object({
   name: z.string(),
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
   blocks: z
     .array(
       z.object({
         type: z.string(),
-        settings: z.record(z.unknown()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .optional(),

@@ -33,29 +33,30 @@ export const menuItemSchema: z.ZodType<MenuItemInput> = z.lazy(() =>
   }),
 );
 
-function collectDepthErrors(items: MenuItemInput[], depth: number, path: string): z.ZodIssue[] {
-  const issues: z.ZodIssue[] = [];
+function collectDepthErrors(
+  items: MenuItemInput[],
+  depth: number,
+  path: string,
+  ctx: z.RefinementCtx,
+): void {
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
     const itemPath = `${path}[${i}]`;
     if (depth > MAX_MENU_DEPTH) {
-      issues.push({
+      ctx.addIssue({
         code: 'custom',
         message: `Menu items cannot exceed ${MAX_MENU_DEPTH} levels of nesting`,
         path: itemPath.split(/[[\].]/).filter(Boolean),
       });
     }
     if (item.items?.length) {
-      issues.push(...collectDepthErrors(item.items, depth + 1, `${itemPath}.items`));
+      collectDepthErrors(item.items, depth + 1, `${itemPath}.items`, ctx);
     }
   }
-  return issues;
 }
 
 export const menuItemsSchema = z.array(menuItemSchema).superRefine((items, ctx) => {
-  for (const issue of collectDepthErrors(items, 1, 'items')) {
-    ctx.addIssue(issue);
-  }
+  collectDepthErrors(items, 1, 'items', ctx);
 });
 
 const handleSchema = z

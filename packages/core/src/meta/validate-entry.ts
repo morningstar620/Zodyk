@@ -36,7 +36,7 @@ function buildFieldZodSchema(field: MetaFieldDefinition): z.ZodTypeAny {
       schema = z.string().url();
       break;
     case 'json':
-      schema = z.union([z.record(z.unknown()), z.array(z.unknown())]);
+      schema = z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]);
       break;
     case 'image':
     case 'file':
@@ -78,8 +78,8 @@ function buildFieldZodSchema(field: MetaFieldDefinition): z.ZodTypeAny {
   return schema.optional().nullable();
 }
 
-function buildEntryShape(fields: MetaFieldDefinition[]): z.ZodObject<z.ZodRawShape> {
-  const shape: z.ZodRawShape = {};
+function buildEntryShape(fields: MetaFieldDefinition[]): z.ZodObject<Record<string, z.ZodTypeAny>> {
+  const shape: Record<string, z.ZodTypeAny> = {};
   const topLevel: Record<string, MetaFieldDefinition[]> = {};
 
   for (const field of fields) {
@@ -100,7 +100,7 @@ function buildEntryShape(fields: MetaFieldDefinition[]): z.ZodObject<z.ZodRawSha
   return z.object(shape).passthrough();
 }
 
-export function buildEntrySchema(fields: MetaFieldDefinition[]): z.ZodObject<z.ZodRawShape> {
+export function buildEntrySchema(fields: MetaFieldDefinition[]): z.ZodObject<Record<string, z.ZodTypeAny>> {
   return buildEntryShape(fields);
 }
 
