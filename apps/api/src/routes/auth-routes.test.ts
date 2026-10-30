@@ -24,6 +24,8 @@ const MockAuthError = vi.hoisted(() => {
   };
 });
 
+const resetAttempts = vi.hoisted(() => new Map<string, number>());
+
 vi.mock('@zodyk/auth', () => ({
   AuthError: MockAuthError,
 
@@ -53,8 +55,6 @@ vi.mock('@zodyk/auth', () => ({
   requestPasswordReset: mocks.requestPasswordReset,
   resetPassword: mocks.resetPassword,
 }));
-
-const resetAttempts = vi.hoisted(() => new Map<string, number>());
 
 
 describe('authentication HTTP rate limits', () => {
