@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useApi, invalidateApi } from '@/hooks/use-api';
 import { TableSkeleton } from '@/components/skeletons';
+import { formatMoney, PaymentsNav } from '@/components/payments/payments-nav';
 
 interface PaymentRow {
   id: string;
@@ -36,16 +37,23 @@ interface PaymentsResponse {
   totalPages: number;
 }
 
-function formatMoney(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      currencyDisplay: 'symbol',
-    }).format(amount / 100);
-  } catch {
-    return `${(amount / 100).toFixed(2)} ${currency}`;
-  }
+interface PaymentMetrics {
+  revenue: Array<{ currency: string; amount: number; count?: number }>;
+  mrr: Array<{ currency: string; amount: number }>;
+  subscribers: {
+    active: number;
+    trialing: number;
+    past_due: number;
+    paused: number;
+    cancelled: number;
+    pending: number;
+  };
+  churnRate: number;
+}
+
+function formatTotals(rows: Array<{ currency: string; amount: number }>) {
+  if (rows.length === 0) return '—';
+  return rows.map((row) => formatMoney(row.amount, row.currency)).join(' · ');
 }
 
 export default function PaymentsPage() {
@@ -63,6 +71,7 @@ export default function PaymentsPage() {
   }, [status, referenceType]);
 
   const { data, isLoading } = useApi<PaymentsResponse>(query);
+  const { data: metrics } = useApi<PaymentMetrics>('/api/v1/payments/metrics');
   const items = data?.items ?? [];
 
   const refund = async (id: string) => {
@@ -90,13 +99,49 @@ export default function PaymentsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Payments</h1>
           <p className="text-zinc-600">
-            Gateway ledger for any reference type (courses, bookings, invoices, …)
+            Ledger, subscriptions, and invoices. Paid orders can download a PDF invoice.
           </p>
         </div>
         <Link href="/settings/payments" className="text-sm text-zinc-600 hover:text-zinc-900">
           Gateway settings →
         </Link>
       </div>
+
+      <PaymentsNav />
+
+      {metrics && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-zinc-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Revenue</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900">
+              {formatTotals(metrics.revenue)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">MRR</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900">{formatTotals(metrics.mrr)}</p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Subscribers</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900">
+              {metrics.subscribers.active + metrics.subscribers.trialing}
+            </p>
+            <p className="text-xs text-zinc-500">
+              {metrics.subscribers.active} active · {metrics.subscribers.trialing} trialing ·{' '}
+              {metrics.subscribers.pending} pending
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 p-4">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Churn</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900">
+              {(metrics.churnRate * 100).toFixed(1)}%
+            </p>
+            <p className="text-xs text-zinc-500">
+              {metrics.subscribers.cancelled} cancelled of started subscriptions
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <select
@@ -178,17 +223,28 @@ export default function PaymentsPage() {
                       {payment.description || '—'}
                     </TableCell>
                     <TableCell className="text-right">
-                      {(payment.status === 'paid' ||
-                        payment.status === 'partially_refunded') && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={refundingId === payment.id}
-                          onClick={() => void refund(payment.id)}
-                        >
-                          {refundingId === payment.id ? 'Refunding…' : 'Refund'}
-                        </Button>
-                      )}
+                      <div className="flex justify-end gap-2">
+                        {(payment.status === 'paid' ||
+                          payment.status === 'partially_refunded' ||
+                          payment.status === 'refunded') && (
+                          <a
+                            className="inline-flex h-8 items-center rounded-md border border-zinc-200 px-3 text-sm hover:bg-zinc-50"
+                            href={`/api/v1/payments/${payment.id}/invoice`}
+                          >
+                            Invoice
+                          </a>
+                        )}
+                        {(payment.status === 'paid' || payment.status === 'partially_refunded') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={refundingId === payment.id}
+                            onClick={() => void refund(payment.id)}
+                          >
+                            {refundingId === payment.id ? 'Refunding…' : 'Refund'}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

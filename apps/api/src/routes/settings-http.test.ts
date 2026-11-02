@@ -210,6 +210,13 @@ describe('admin settings HTTP methods', () => {
 
     expect(saveMethod(media, '/api/v1/settings/media')).toBe('PATCH');
     expect(saveMethod(payments, '/api/v1/settings/payments')).toBe('PATCH');
+    expect(payments).toContain('disabled={!g.ready}');
+
+    const routes = readFileSync(resolve(root, 'apps/api/src/routes/v1.ts'), 'utf8');
+    const listSubscriptions = routes.indexOf("mount(router, 'get', '/payments/subscriptions'");
+    const paymentById = routes.indexOf("mount(router, 'get', '/payments/:id'");
+    expect(listSubscriptions).toBeGreaterThan(-1);
+    expect(paymentById).toBeGreaterThan(listSubscriptions);
   });
 
   it('PATCH /settings/media persists credentials and reloads the masked config', async () => {
@@ -313,6 +320,22 @@ describe('admin settings HTTP methods', () => {
       .credentials;
     expect(reloadedCredentials.secretKey).toMatch(/\*+4242$/);
     expect(JSON.stringify(docs)).not.toContain(STRIPE_SECRET);
+  });
+
+  it('PATCH /settings/payments rejects a gateway that is not ready', async () => {
+    for (const gateway of ['paypal', 'cashfree', 'phonepe', 'payu']) {
+      const rejected = await request('PATCH', '/api/v1/settings/payments', {
+        activeGateway: gateway,
+        mode: 'test',
+        gateway,
+        credentials: { clientId: 'id', clientSecret: 'secret' },
+      });
+      expect(rejected.status).toBe(400);
+      expect(rejected.data).toMatchObject({ code: 'GATEWAY_NOT_READY' });
+    }
+
+    const reloaded = await request('GET', '/api/v1/settings/payments');
+    expect(reloaded.data).toMatchObject({ activeGateway: null });
   });
 
   it('PUT /settings/payments returns 405 and does not change the active gateway', async () => {

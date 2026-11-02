@@ -289,7 +289,7 @@ The Payments Module is a core, plugin-free feature of Zodyk. It enables business
 | **Gateway** | **Region Focus** | **One-Time** | **Subscriptions** | **Phase** |
 | ----------- | ---------------- | ------------ | ----------------- | --------- |
 | Stripe      | Global           | ✓            | ✓                 | 1.5       |
-| Razorpay    | India / SEA      | ✓            | ✓                 | 1.5       |
+| Razorpay    | India / SEA      | ✓            | ✗                 | 1.5       |
 | PayPal      | Global           | ✓            | ✓                 | 2.0       |
 | Paddle      | Global (SaaS)    | ✓            | ✓                 | 2.0       |
 | Cashfree    | India            | ✓            | ✗                 | 2.0       |
@@ -297,6 +297,8 @@ The Payments Module is a core, plugin-free feature of Zodyk. It enables business
 | PayU        | India / LATAM    | ✓            | ✓                 | 2.0       |
 | Square      | US / Canada      | ✓            | ✗                 | 2.5       |
 | Mollie      | Europe           | ✓            | ✓                 | 2.5       |
+
+Razorpay subscriptions are not implemented. The adapter reports `subscriptions: false` and rejects subscription calls. PayPal, Cashfree, PhonePe, and PayU stay phase 2: they are registered with `ready: false` and cannot be saved as the active gateway.
 
 ## **7.3 Core Features**
 
@@ -366,8 +368,9 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 
 - HMAC signature validation per gateway before processing
 - Idempotency keys to prevent duplicate event processing
-- Events persisted to a payment_events collection before handler execution
-- Retry queue via BullMQ if handler processing fails
+- Events persisted to a payment_events collection before handler execution, with `processedAt` unset
+- `processedAt` is set only after the handler succeeds. A failure leaves the event unprocessed, and replaying that webhook runs the handler again instead of returning a duplicate
+- A BullMQ retry queue (section 8) is not wired yet; replay of an unprocessed event is the retry path
 - Events forwarded to the Zodyk workflow engine for automation triggers
 
 ## **7.5 Data Models**
@@ -416,17 +419,17 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 
 ### **Subscription**
 
-| **\_id**                  | ObjectId                                              |
-| ------------------------- | ----------------------------------------------------- |
-| **customerId**            | ObjectId → User                                       |
-| **productId**             | ObjectId → Product                                    |
-| **priceId**               | ObjectId → Price                                      |
-| **status**                | trialing \| active \| past_due \| paused \| cancelled |
-| **currentPeriodStart**    | DateTime                                              |
-| **currentPeriodEnd**      | DateTime                                              |
-| **cancelAtPeriodEnd**     | Boolean                                               |
-| **gatewaySubscriptionId** | String                                                |
-| **metadata**              | Object                                                |
+| **\_id**                  | ObjectId                                                         |
+| ------------------------- | ---------------------------------------------------------------- |
+| **customerId**            | ObjectId → User                                                  |
+| **productId**             | ObjectId → Product                                               |
+| **priceId**               | ObjectId → Price                                                 |
+| **status**                | pending \| trialing \| active \| past_due \| paused \| cancelled |
+| **currentPeriodStart**    | DateTime                                                         |
+| **currentPeriodEnd**      | DateTime                                                         |
+| **cancelAtPeriodEnd**     | Boolean                                                          |
+| **gatewaySubscriptionId** | String                                                           |
+| **metadata**              | Object                                                           |
 
 ## **7.6 Admin Panel UI**
 
@@ -454,6 +457,8 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 | POST       | /api/payments/subscriptions/:id/cancel | Cancel subscription        |
 | POST       | /api/payments/webhooks/:gateway        | Inbound webhook handler    |
 | GET        | /api/payments/invoices/:orderId        | Download invoice PDF       |
+
+Implemented routes are mounted at `/api/v1` (for example `GET /api/v1/payments/subscriptions`, `GET /api/v1/payments/invoices/:id`, and `POST /api/v1/payments/links/:token/checkout`). `pending` is the subscription status until a paid or trialing gateway webhook confirms the intent.
 
 ## **7.8 Security Considerations**
 

@@ -2,29 +2,32 @@ import {
   DEFAULT_TENANT_ID,
   createPaymentSchema,
   createSubscriptionSchema,
+  paymentEventListQuerySchema,
   paymentListQuerySchema,
   refundPaymentSchema,
+  subscriptionListQuerySchema,
   type CreatePaymentInput,
   type CreateSubscriptionInput,
+  type PaymentEventListQuery,
   type PaymentListQuery,
   type RefundPaymentInput,
+  type SubscriptionListQuery,
+  type SubscriptionStatus,
 } from '@zodyk/core';
-import { connectDatabase, getModels, type IPayment } from '@zodyk/database';
+import type { IPayment, IPaymentEvent, ISubscriptionIntent } from '@zodyk/database';
 import { getActivePaymentGateway } from './config';
-import {
-  CapabilityNotSupportedError,
-  PaymentNotFoundError,
-  PaymentsError,
-} from './errors';
-import { metadataToRecord } from './utils';
+import { ensureDb } from './db';
+import { CapabilityNotSupportedError, PaymentNotFoundError, PaymentsError } from './errors';
+import { isObjectId, metadataToRecord } from './utils';
 import type { NormalizedPaymentEvent } from './types';
 
-async function ensureDb() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGODB_URI is required');
-  await connectDatabase(uri);
-  return getModels();
-}
+const CONFIRMED_SUBSCRIPTION_STATUSES = [
+  'trialing',
+  'active',
+  'past_due',
+  'paused',
+  'cancelled',
+] as const satisfies readonly SubscriptionStatus[];
 
 function serializePayment(doc: IPayment) {
   return {
@@ -47,6 +50,80 @@ function serializePayment(doc: IPayment) {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+function serializeSubscription(doc: ISubscriptionIntent) {
+  return {
+    id: String(doc._id),
+    tenantId: doc.tenantId,
+    amount: doc.amount,
+    currency: doc.currency,
+    interval: doc.interval,
+    intervalCount: doc.intervalCount,
+    trialDays: doc.trialDays,
+    status: doc.status,
+    reference: { type: doc.referenceType, id: doc.referenceId },
+    gateway: doc.gateway,
+    gatewaySubscriptionId: doc.gatewaySubscriptionId,
+    checkoutUrl: doc.checkoutUrl,
+    clientSecret: doc.clientSecret,
+    customer: doc.customer,
+    description: doc.description,
+    metadata: metadataToRecord(doc.metadata as Record<string, string> | Map<string, string>),
+    cancelAtPeriodEnd: doc.cancelAtPeriodEnd,
+    currentPeriodStart: doc.currentPeriodStart,
+    currentPeriodEnd: doc.currentPeriodEnd,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function serializePaymentEvent(doc: IPaymentEvent) {
+  return {
+    id: String(doc._id),
+    gateway: doc.gateway,
+    eventId: doc.eventId,
+    type: doc.type,
+    paymentId: doc.paymentId ? String(doc.paymentId) : undefined,
+    payload: doc.payload,
+    processed: Boolean(doc.processedAt),
+    processedAt: doc.processedAt,
+    error: doc.error,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function isDuplicateKeyError(err: unknown): boolean {
+  return Boolean(
+    err && typeof err === 'object' && 'code' in err && (err as { code?: number }).code === 11000,
+  );
+}
+
+function jsonPayload(raw: unknown): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(JSON.stringify(raw)) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to a marker the inspector can still show.
+  }
+  return { unserializable: true };
+}
+
+function confirmedSubscriptionStatus(status: string | undefined): SubscriptionStatus | undefined {
+  if (!status) return undefined;
+  return (CONFIRMED_SUBSCRIPTION_STATUSES as readonly string[]).includes(status)
+    ? (status as SubscriptionStatus)
+    : undefined;
+}
+
+function nextGatewaySubscriptionId(current: string | undefined, incoming: string | undefined) {
+  if (!incoming) return current;
+  if (!current) return incoming;
+  if (incoming.startsWith('cs_') && !current.startsWith('cs_')) return current;
+  return incoming;
 }
 
 export async function createPayment(input: CreatePaymentInput) {
@@ -175,42 +252,40 @@ export async function refundPayment(id: string, input: RefundPaymentInput = {}) 
   };
 }
 
-export async function handleWebhook(gatewayId: string, req: {
-  headers: Headers | Record<string, string | string[] | undefined>;
-  rawBody: string;
-}) {
+export async function handleWebhook(
+  gatewayId: string,
+  req: {
+    headers: Headers | Record<string, string | string[] | undefined>;
+    rawBody: string;
+  },
+) {
   const { gateway } = await getActivePaymentGateway(gatewayId);
   const event = await gateway.verifyWebhook(req);
-  return applyNormalizedEvent(gatewayId, event);
+  return applyPaymentEvent(gatewayId, event);
 }
 
-async function applyNormalizedEvent(gatewayId: string, event: NormalizedPaymentEvent) {
-  const { Payment, PaymentEvent, SubscriptionIntent } = await ensureDb();
-
-  try {
-    await PaymentEvent.create({
+async function findSubscriptionForEvent(gatewayId: string, event: NormalizedPaymentEvent) {
+  const { SubscriptionIntent } = await ensureDb();
+  if (event.subscriptionId && isObjectId(event.subscriptionId)) {
+    const byId = await SubscriptionIntent.findOne({
+      _id: event.subscriptionId,
       tenantId: DEFAULT_TENANT_ID,
       gateway: gatewayId,
-      eventId: event.eventId,
-      type: event.type,
-      payload: event.raw as Record<string, unknown>,
-      processedAt: new Date(),
     });
-  } catch (err) {
-    // duplicate key → already processed
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code?: number }).code === 11000
-    ) {
-      return { duplicate: true, event };
-    }
-    throw err;
+    if (byId) return byId;
   }
+  if (!event.gatewaySubscriptionId) return null;
+  return SubscriptionIntent.findOne({
+    tenantId: DEFAULT_TENANT_ID,
+    gateway: gatewayId,
+    gatewaySubscriptionId: event.gatewaySubscriptionId,
+  });
+}
 
+async function applyEventEffects(gatewayId: string, event: NormalizedPaymentEvent) {
+  const { Payment } = await ensureDb();
   let payment: IPayment | null = null;
-  if (event.paymentId) {
+  if (event.paymentId && isObjectId(event.paymentId)) {
     payment = await Payment.findOne({
       _id: event.paymentId,
       tenantId: DEFAULT_TENANT_ID,
@@ -225,11 +300,6 @@ async function applyNormalizedEvent(gatewayId: string, event: NormalizedPaymentE
   }
 
   if (payment) {
-    await PaymentEvent.updateOne(
-      { tenantId: DEFAULT_TENANT_ID, gateway: gatewayId, eventId: event.eventId },
-      { $set: { paymentId: payment._id } },
-    );
-
     if (event.type === 'payment.succeeded') {
       payment.status = 'paid';
       payment.paidAt = payment.paidAt || new Date();
@@ -244,35 +314,117 @@ async function applyNormalizedEvent(gatewayId: string, event: NormalizedPaymentE
     } else if (event.type === 'payment.refunded') {
       const refunded = event.amount ?? payment.amount;
       payment.refundedAmount = Math.min(payment.amount, Math.max(payment.refundedAmount, refunded));
-      payment.status =
-        payment.refundedAmount >= payment.amount ? 'refunded' : 'partially_refunded';
+      payment.status = payment.refundedAmount >= payment.amount ? 'refunded' : 'partially_refunded';
       await payment.save();
     }
   }
 
-  if (event.gatewaySubscriptionId && event.type.startsWith('subscription.')) {
-    const sub = await SubscriptionIntent.findOne({
-      tenantId: DEFAULT_TENANT_ID,
-      gateway: gatewayId,
-      gatewaySubscriptionId: event.gatewaySubscriptionId,
-    });
-    if (sub) {
+  let subscription: ISubscriptionIntent | null = null;
+  if (event.type.startsWith('subscription.')) {
+    subscription = await findSubscriptionForEvent(gatewayId, event);
+    if (subscription) {
+      const gatewaySubscriptionId = nextGatewaySubscriptionId(
+        subscription.gatewaySubscriptionId,
+        event.gatewaySubscriptionId,
+      );
+      if (gatewaySubscriptionId) subscription.gatewaySubscriptionId = gatewaySubscriptionId;
+      if (event.currentPeriodStart) subscription.currentPeriodStart = event.currentPeriodStart;
+      if (event.currentPeriodEnd) subscription.currentPeriodEnd = event.currentPeriodEnd;
+
       if (event.type === 'subscription.cancelled') {
-        sub.status = 'cancelled';
-      } else if (event.status) {
-        const allowed = ['trialing', 'active', 'past_due', 'paused', 'cancelled'] as const;
-        if ((allowed as readonly string[]).includes(event.status)) {
-          sub.status = event.status as (typeof allowed)[number];
+        subscription.status = 'cancelled';
+      } else {
+        const next = confirmedSubscriptionStatus(event.status);
+        if (next && (!event.promotePendingOnly || subscription.status === 'pending')) {
+          subscription.status = next;
         }
       }
-      await sub.save();
+      await subscription.save();
     }
   }
 
+  return { payment, subscription };
+}
+
+export async function applyPaymentEvent(gatewayId: string, event: NormalizedPaymentEvent) {
+  const { PaymentEvent } = await ensureDb();
+  const identity = {
+    tenantId: DEFAULT_TENANT_ID,
+    gateway: gatewayId,
+    eventId: event.eventId,
+  };
+
+  let eventDoc = await PaymentEvent.findOne(identity);
+  if (eventDoc?.processedAt) {
+    return { duplicate: true as const, event };
+  }
+
+  if (!eventDoc) {
+    try {
+      eventDoc = await PaymentEvent.create({
+        ...identity,
+        type: event.type,
+        payload: jsonPayload(event.raw),
+      });
+    } catch (err) {
+      if (!isDuplicateKeyError(err)) throw err;
+      eventDoc = await PaymentEvent.findOne(identity);
+      if (!eventDoc) throw err;
+      if (eventDoc.processedAt) {
+        return { duplicate: true as const, event };
+      }
+    }
+  }
+
+  try {
+    const { payment, subscription } = await applyEventEffects(gatewayId, event);
+    await PaymentEvent.updateOne(
+      { _id: eventDoc._id },
+      {
+        $set: {
+          processedAt: new Date(),
+          type: event.type,
+          ...(payment ? { paymentId: payment._id } : {}),
+        },
+        $unset: { error: '' },
+      },
+    );
+    return {
+      duplicate: false as const,
+      event,
+      payment: payment ? serializePayment(payment) : null,
+      subscription: subscription ? serializeSubscription(subscription) : null,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Payment event processing failed';
+    await PaymentEvent.updateOne(
+      { _id: eventDoc._id },
+      { $set: { error: message.slice(0, 500) } },
+    ).catch(() => undefined);
+    throw err;
+  }
+}
+
+export async function listPaymentEvents(query: Partial<PaymentEventListQuery> = {}) {
+  const parsed = paymentEventListQuerySchema.parse(query);
+  const { PaymentEvent } = await ensureDb();
+  const filter: Record<string, unknown> = { tenantId: DEFAULT_TENANT_ID };
+  if (parsed.gateway) filter.gateway = parsed.gateway;
+  if (parsed.processed === 'true') filter.processedAt = { $exists: true, $ne: null };
+  if (parsed.processed === 'false') filter.processedAt = { $exists: false };
+
+  const skip = (parsed.page - 1) * parsed.limit;
+  const [items, total] = await Promise.all([
+    PaymentEvent.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parsed.limit),
+    PaymentEvent.countDocuments(filter),
+  ]);
+
   return {
-    duplicate: false,
-    event,
-    payment: payment ? serializePayment(payment) : null,
+    items: items.map(serializePaymentEvent),
+    page: parsed.page,
+    limit: parsed.limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / parsed.limit)),
   };
 }
 
@@ -292,7 +444,7 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     interval: parsed.interval,
     intervalCount: parsed.intervalCount,
     trialDays: parsed.trialDays,
-    status: parsed.trialDays ? 'trialing' : 'active',
+    status: 'pending',
     referenceType: parsed.reference.type,
     referenceId: parsed.reference.id,
     gateway: config.activeGateway,
@@ -317,31 +469,48 @@ export async function createSubscription(input: CreateSubscriptionInput) {
     throw err;
   }
 
+  return serializeSubscription(doc);
+}
+
+export async function listSubscriptions(query: Partial<SubscriptionListQuery> = {}) {
+  const parsed = subscriptionListQuerySchema.parse(query);
+  const { SubscriptionIntent } = await ensureDb();
+  const filter: Record<string, unknown> = { tenantId: DEFAULT_TENANT_ID };
+  if (parsed.status) filter.status = parsed.status;
+  if (parsed.gateway) filter.gateway = parsed.gateway;
+
+  const skip = (parsed.page - 1) * parsed.limit;
+  const [items, total] = await Promise.all([
+    SubscriptionIntent.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parsed.limit),
+    SubscriptionIntent.countDocuments(filter),
+  ]);
+
   return {
-    id: String(doc._id),
-    amount: doc.amount,
-    currency: doc.currency,
-    interval: doc.interval,
-    intervalCount: doc.intervalCount,
-    trialDays: doc.trialDays,
-    status: doc.status,
-    reference: { type: doc.referenceType, id: doc.referenceId },
-    gateway: doc.gateway,
-    gatewaySubscriptionId: doc.gatewaySubscriptionId,
-    checkoutUrl: doc.checkoutUrl,
-    clientSecret: doc.clientSecret,
-    customer: doc.customer,
-    description: doc.description,
-    metadata: metadataToRecord(doc.metadata as Record<string, string> | Map<string, string>),
-    cancelAtPeriodEnd: doc.cancelAtPeriodEnd,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+    items: items.map(serializeSubscription),
+    page: parsed.page,
+    limit: parsed.limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / parsed.limit)),
   };
+}
+
+export async function getSubscription(id: string) {
+  if (!isObjectId(id)) {
+    throw new PaymentsError(`Subscription "${id}" was not found.`, 'SUBSCRIPTION_NOT_FOUND', 404);
+  }
+  const { SubscriptionIntent } = await ensureDb();
+  const doc = await SubscriptionIntent.findOne({ _id: id, tenantId: DEFAULT_TENANT_ID });
+  if (!doc) {
+    throw new PaymentsError(`Subscription "${id}" was not found.`, 'SUBSCRIPTION_NOT_FOUND', 404);
+  }
+  return serializeSubscription(doc);
 }
 
 export async function cancelSubscription(id: string) {
   const { SubscriptionIntent } = await ensureDb();
-  const doc = await SubscriptionIntent.findOne({ _id: id, tenantId: DEFAULT_TENANT_ID });
+  const doc = isObjectId(id)
+    ? await SubscriptionIntent.findOne({ _id: id, tenantId: DEFAULT_TENANT_ID })
+    : null;
   if (!doc) {
     throw new PaymentsError(`Subscription "${id}" was not found.`, 'SUBSCRIPTION_NOT_FOUND', 404);
   }

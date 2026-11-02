@@ -37,6 +37,10 @@ export function verifyHmacSha256(
   }
 }
 
+export function isObjectId(value: string | undefined | null): value is string {
+  return typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value);
+}
+
 export function metadataToRecord(
   metadata?: Record<string, string> | Map<string, string> | null,
 ): Record<string, string> {

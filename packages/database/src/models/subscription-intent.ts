@@ -1,8 +1,4 @@
-import {
-  DEFAULT_TENANT_ID,
-  SUBSCRIPTION_STATUSES,
-  type SubscriptionStatus,
-} from '@zodyk/core';
+import { DEFAULT_TENANT_ID, SUBSCRIPTION_STATUSES, type SubscriptionStatus } from '@zodyk/core';
 import { Schema, type Document, type Model } from 'mongoose';
 
 export interface ISubscriptionIntentCustomer {
@@ -60,7 +56,7 @@ const subscriptionIntentSchema = new Schema<ISubscriptionIntent>(
       type: String,
       required: true,
       enum: SUBSCRIPTION_STATUSES,
-      default: 'trialing',
+      default: 'pending',
     },
     referenceType: { type: String, required: true },
     referenceId: { type: String, required: true },
