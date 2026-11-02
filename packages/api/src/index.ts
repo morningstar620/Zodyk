@@ -31,13 +31,10 @@ export function handleApiError(error: unknown): Response {
   return Response.json({ error: 'Internal server error' }, { status: 500 });
 }
 
-export function getClientIp(request: Request): string | undefined {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    undefined
-  );
-}
+export {
+  setTrustedClientIp,
+  getClientIp,
+} from './request-context';
 
 export * from './request-log';
 

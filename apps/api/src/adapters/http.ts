@@ -1,9 +1,13 @@
+
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 
+import { setTrustedClientIp } from '../../../../packages/api/src/request-context';
 /**
  * Convert an Express request into a Web Fetch API Request.
  * Expects the raw body middleware to leave `req.body` as a Buffer (or empty).
  */
+
+
 export function toWebRequest(req: ExpressRequest): Request {
   const host = req.get('host') ?? 'localhost';
   const protocol = req.protocol || 'http';
@@ -39,8 +43,10 @@ export function toWebRequest(req: ExpressRequest): Request {
     }
   }
 
-  return new Request(url, init);
-}
+  const webRequest = new Request(url, init);
+  setTrustedClientIp(webRequest, req.ip);
+  return webRequest;
+  }
 
 /** Pipe a Web Fetch Response into an Express response. */
 export async function sendWebResponse(

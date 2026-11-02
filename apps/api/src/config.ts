@@ -14,6 +14,18 @@ function parseOrigins(value: string | undefined): string[] {
 
 const port = Number(process.env.API_PORT ?? process.env.PORT ?? 5002);
 
+function parseTrustedProxyHops(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') return 0;
+
+  const hops = Number(value);
+
+  if (!Number.isSafeInteger(hops) || hops < 0) {
+    throw new Error('TRUSTED_PROXY_HOPS must be a non-negative integer');
+  }
+
+  return hops;
+}
+
 export const env = {
   port: Number.isFinite(port) ? port : 5002,
   mongodbUri: process.env.MONGODB_URI ?? '',
@@ -32,4 +44,5 @@ export const env = {
   ],
   bodyLimit: process.env.API_BODY_LIMIT ?? '100mb',
   requestTimeoutMs: Number(process.env.API_REQUEST_TIMEOUT_MS ?? 120_000),
+  trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS),
 };
