@@ -160,3 +160,5 @@ export async function updateMediaSettings(
     },
   };
 }
+
+export { getLocalizationSettings, updateLocalizationSettings } from './localization';

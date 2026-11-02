@@ -1,9 +1,16 @@
 'use client';
 
-import type { MetaFieldDefinition } from '@zodyk/core';
+import {
+  entityReferenceKey,
+  parseEntityReference,
+  parseEntityReferenceKey,
+  type MetaFieldDefinition,
+} from '@zodyk/core';
 import { Checkbox, Input, Label, Select } from '@zodyk/shared-ui';
+import { useState } from 'react';
 import { MediaPicker } from '@/components/media/MediaPicker';
 import { ConditionalWrapper } from './ConditionalWrapper';
+import type { EntityTargetOption } from './entity-targets';
 import { RelationPicker } from './RelationPicker';
 import { RepeaterField } from './RepeaterField';
 import { RichTextField } from './RichTextField';
@@ -16,6 +23,7 @@ interface DynamicFieldRendererProps {
   allFields: MetaFieldDefinition[];
   formData: Record<string, unknown>;
   metaObjects?: { slug: string; name: string }[];
+  entityTargets?: EntityTargetOption[];
 }
 
 export function DynamicFieldRenderer({
@@ -25,6 +33,7 @@ export function DynamicFieldRenderer({
   allFields,
   formData,
   metaObjects,
+  entityTargets,
 }: DynamicFieldRendererProps) {
   const renderInput = () => {
     switch (field.type) {
@@ -55,10 +64,7 @@ export function DynamicFieldRenderer({
       case 'boolean':
         return (
           <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={Boolean(value)}
-              onChange={(e) => onChange(e.target.checked)}
-            />
+            <Checkbox checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
             {field.label}
           </label>
         );
@@ -130,14 +136,7 @@ export function DynamicFieldRenderer({
         );
       case 'gallery': {
         const ids = Array.isArray(value) ? value : [];
-        return (
-          <MediaPicker
-            mode="multiple"
-            accept="image/*"
-            value={ids}
-            onChange={onChange}
-          />
-        );
+        return <MediaPicker mode="multiple" accept="image/*" value={ids} onChange={onChange} />;
       }
       case 'relation': {
         const relation = field.settings?.relation;
@@ -159,6 +158,16 @@ export function DynamicFieldRenderer({
             onChange={onChange}
             allFields={allFields}
             metaObjects={metaObjects}
+            entityTargets={entityTargets}
+          />
+        );
+      case 'entity_reference':
+        return (
+          <EntityReferenceInput
+            field={field}
+            value={value}
+            onChange={onChange}
+            entityTargets={entityTargets ?? []}
           />
         );
       default:
@@ -174,7 +183,10 @@ export function DynamicFieldRenderer({
             {field.label}
             {field.required ? ' *' : ''}
           </Label>
-          <Select value={typeof value === 'string' ? value : ''} onChange={(e) => onChange(e.target.value)}>
+          <Select
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+          >
             <option value="">Select {field.label}</option>
             {field.settings.options.map((o) => (
               <option key={o.value} value={o.value}>
@@ -200,6 +212,104 @@ export function DynamicFieldRenderer({
         {renderInput()}
       </div>
     </ConditionalWrapper>
+  );
+}
+
+function referenceIds(value: unknown, cardinality: 'one' | 'many'): string | string[] | undefined {
+  if (cardinality === 'many') {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item) => parseEntityReference(item)?.entityId)
+      .filter((id): id is string => Boolean(id));
+  }
+  return parseEntityReference(value)?.entityId;
+}
+
+function resolveEntityTarget(
+  settings: MetaFieldDefinition['settings'],
+): { category: 'meta_object' | 'system'; slug: string } | null {
+  const reference = settings?.entityReference;
+  if (!reference?.targetSlug && !reference?.targetCategory) return null;
+  const parsed = reference.targetSlug ? parseEntityReferenceKey(reference.targetSlug) : null;
+  const category =
+    parsed?.category ??
+    reference.targetCategory ??
+    (reference.targetSlug ? 'meta_object' : undefined);
+  const slug = parsed?.slug ?? (parsed ? undefined : reference.targetSlug);
+  if (!category || !slug) return null;
+  return { category, slug };
+}
+
+function recordListUrl(category: 'meta_object' | 'system', slug: string): string {
+  if (category === 'system') return `/api/v1/system-entities/${slug}/records?limit=50`;
+  return `/api/v1/meta-objects/${slug}/entries?limit=50`;
+}
+
+function EntityReferenceInput({
+  field,
+  value,
+  onChange,
+  entityTargets,
+}: {
+  field: MetaFieldDefinition;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  entityTargets: EntityTargetOption[];
+}) {
+  const configured = resolveEntityTarget(field.settings);
+  const cardinality = field.settings?.entityReference?.cardinality ?? 'one';
+  const [pickedKey, setPickedKey] = useState(
+    configured ? entityReferenceKey(configured.category, configured.slug) : '',
+  );
+  const picked = pickedKey ? parseEntityReferenceKey(pickedKey) : null;
+  const target = configured ?? (picked ? { category: picked.category, slug: picked.slug } : null);
+
+  const writeIds = (next: string | string[]) => {
+    if (!target) return;
+    const entityType = entityReferenceKey(target.category, target.slug);
+    if (cardinality === 'many') {
+      const ids = Array.isArray(next) ? next : [next];
+      onChange(ids.map((entityId) => ({ entityType, entityId })));
+      return;
+    }
+    const entityId = Array.isArray(next) ? next[0] : next;
+    onChange(entityId ? { entityType, entityId } : undefined);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {!configured && (
+        <Select
+          value={pickedKey}
+          onChange={(event) => {
+            setPickedKey(event.target.value);
+            onChange(cardinality === 'many' ? [] : undefined);
+          }}
+        >
+          <option value="">Select record type</option>
+          {entityTargets.map((item) => (
+            <option
+              key={`${item.category}:${item.slug}`}
+              value={entityReferenceKey(item.category, item.slug)}
+            >
+              {item.name}
+            </option>
+          ))}
+        </Select>
+      )}
+      {target ? (
+        <RelationPicker
+          targetSlug={target.slug}
+          cardinality={cardinality}
+          listUrl={recordListUrl(target.category, target.slug)}
+          inputName={`entity-${field.key}-${target.category}-${target.slug}`}
+          value={referenceIds(value, cardinality)}
+          onChange={writeIds}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">Choose a record type to search entries.</p>
+      )}
+    </div>
   );
 }
 

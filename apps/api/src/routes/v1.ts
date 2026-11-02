@@ -129,7 +129,12 @@ import {
   refundPaymentHandler,
   updatePaymentsSettingsHandler,
 } from '@zodyk/api/payments';
-import { getMediaSettings, updateMediaSettings } from '@zodyk/api/settings';
+import {
+  getLocalizationSettings,
+  getMediaSettings,
+  updateLocalizationSettings,
+  updateMediaSettings,
+} from '@zodyk/api/settings';
 import { Router } from 'express';
 import { mount } from '../mount';
 
@@ -940,6 +945,27 @@ export function createV1Router(): Router {
   });
 
   mount(router, 'put', '/settings/seo', async () => settingsMethodNotAllowed());
+
+  mount(router, 'get', '/settings/localization', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      return Response.json(await getLocalizationSettings(session));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'patch', '/settings/localization', async (request) => {
+    try {
+      const session = await getApiSession(request);
+      const body = await request.json();
+      return Response.json(await updateLocalizationSettings(session, body, getClientIp(request)));
+    } catch (error) {
+      return handleApiError(error);
+    }
+  });
+
+  mount(router, 'put', '/settings/localization', async () => settingsMethodNotAllowed());
 
   mount(router, 'get', '/redirects', async (request) => {
     try {

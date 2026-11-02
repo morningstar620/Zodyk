@@ -15,6 +15,7 @@ export * from './schemas/auth';
 export * from './schemas/user';
 export * from './schemas/payments';
 export * from './meta';
+export * from './settings/localization';
 export * from './entity';
 export * from './media';
 export * from './theme';

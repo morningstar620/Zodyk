@@ -4,13 +4,12 @@ import {
   defaultMetaObjectRouting,
   defaultMetaObjectTemplates,
   ensureSeoGroupOnUpdate,
-  paginationSchema,
-  slugToHandle,
   updateMetaObjectSchema,
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
 import { invalidateCatalogCache } from '../themes/catalog-cache';
+import { invalidateWebsiteCache } from '../website-cache';
 
 export async function listMetaObjects(session: AuthSession | null) {
   requirePermission(session, 'meta_objects:read');
@@ -121,6 +120,7 @@ export async function createMetaObject(
   });
 
   invalidateCatalogCache(DEFAULT_TENANT_ID);
+  await invalidateWebsiteCache();
   return {
     id: item._id.toString(),
     name: item.name,
@@ -162,7 +162,21 @@ export async function updateMetaObject(
   if (input.description !== undefined) item.description = input.description;
   if (input.status) item.status = input.status;
   if (input.routing) item.routing = { ...item.routing, ...input.routing };
-  if (input.templates) item.templates = { ...item.templates, ...input.templates };
+  if (input.templates) {
+    const current = item.templates ?? {};
+    const next: {
+      templateKey?: string;
+      archiveTemplateKey?: string;
+      singleTemplateKey?: string;
+    } = {};
+    for (const key of ['templateKey', 'archiveTemplateKey', 'singleTemplateKey'] as const) {
+      const incoming = input.templates[key];
+      const value = incoming === undefined ? current[key] : incoming;
+      if (typeof value === 'string' && value.length > 0) next[key] = value;
+    }
+    item.templates = next;
+    item.markModified('templates');
+  }
   if (input.display) item.display = { ...item.display, ...input.display };
 
   if (input.fieldGroups || input.fields) {
@@ -187,6 +201,7 @@ export async function updateMetaObject(
   });
 
   invalidateCatalogCache(DEFAULT_TENANT_ID);
+  await invalidateWebsiteCache();
   return {
     id: item._id.toString(),
     name: item.name,
@@ -242,5 +257,6 @@ export async function deleteMetaObject(
   });
 
   invalidateCatalogCache(DEFAULT_TENANT_ID);
+  await invalidateWebsiteCache();
   return { success: true };
 }

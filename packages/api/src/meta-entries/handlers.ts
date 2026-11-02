@@ -76,7 +76,6 @@ async function getDefinitionOrThrow(slug: string) {
   const def = await MetaObjectDefinition.findOne({
     slug: slug.toLowerCase(),
     tenantId: DEFAULT_TENANT_ID,
-    status: 'active',
   });
   if (!def) throw new AuthError('Meta object not found', 404);
   return def;

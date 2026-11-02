@@ -2,7 +2,6 @@
 
 import { SEO_GROUP_KEY, type MetaFieldGroup } from '@zodyk/core';
 import { Button, Input, Label } from '@zodyk/shared-ui';
-import { slugify } from './utils';
 
 interface FieldGroupEditorProps {
   groups: MetaFieldGroup[];
@@ -10,17 +9,20 @@ interface FieldGroupEditorProps {
 }
 
 export function FieldGroupEditor({ groups, onChange }: FieldGroupEditorProps) {
-  const userGroups = groups
-    .filter((g) => !g.isSystem)
-    .sort((a, b) => a.order - b.order);
+  const userGroups = groups.filter((g) => !g.isSystem).sort((a, b) => a.order - b.order);
   const seoGroup = groups.find((g) => g.key === SEO_GROUP_KEY);
 
   const addGroup = () => {
-    const label = 'New Group';
-    const key = slugify(label);
+    const taken = new Set(groups.map((group) => group.key));
+    let index = userGroups.length + 1;
+    let key = `group_${index}`;
+    while (taken.has(key)) {
+      index += 1;
+      key = `group_${index}`;
+    }
     onChange([
       ...groups.filter((g) => g.key !== SEO_GROUP_KEY),
-      { key, label, order: userGroups.length, isSystem: false },
+      { key, label: 'New group', order: userGroups.length, isSystem: false },
       ...(seoGroup ? [seoGroup] : []),
     ]);
   };
@@ -55,6 +57,7 @@ export function FieldGroupEditor({ groups, onChange }: FieldGroupEditorProps) {
             variant="outline"
             size="sm"
             className="mt-3"
+            disabled={userGroups.length <= 1}
             onClick={() => removeGroup(group.key)}
           >
             Remove group

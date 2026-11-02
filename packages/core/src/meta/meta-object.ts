@@ -4,6 +4,18 @@ import { mergeWithDefaultSeo } from './default-seo-group';
 
 export const metaObjectStatusSchema = z.enum(['active', 'archived']);
 
+/** Storefront, sitemap, and public catalogs only load definitions with this status. */
+export const PUBLIC_META_OBJECT_STATUS = 'active' as const;
+
+export function isMetaObjectPubliclyReadable(status: string | null | undefined): boolean {
+  return status === PUBLIC_META_OBJECT_STATUS;
+}
+
+/** Public API on keeps the definition active. Off archives it so public readers skip it. */
+export function metaObjectStatusForPublicApi(enabled: boolean): 'active' | 'archived' {
+  return enabled ? 'active' : 'archived';
+}
+
 export const metaObjectRoutingSchema = z.object({
   archiveEnabled: z.boolean().default(true),
   archivePath: z.string().min(1).max(200).optional(),
@@ -11,10 +23,12 @@ export const metaObjectRoutingSchema = z.object({
   handleField: z.string().min(1).max(50).default('handle'),
 });
 
+const templateKeySchema = z.string().trim().min(1).max(50).nullable().optional();
+
 export const metaObjectTemplatesSchema = z.object({
-  templateKey: z.string().min(1).max(50).optional(),
-  archiveTemplateKey: z.string().min(1).max(50).optional(),
-  singleTemplateKey: z.string().min(1).max(50).optional(),
+  templateKey: templateKeySchema,
+  archiveTemplateKey: templateKeySchema,
+  singleTemplateKey: templateKeySchema,
 });
 
 export const metaObjectDisplaySchema = z.object({
@@ -82,6 +96,8 @@ export function defaultMetaObjectRouting(slug: string): z.infer<typeof metaObjec
   };
 }
 
-export function defaultMetaObjectTemplates(slug: string): z.infer<typeof metaObjectTemplatesSchema> {
+export function defaultMetaObjectTemplates(
+  slug: string,
+): z.infer<typeof metaObjectTemplatesSchema> {
   return { templateKey: slug };
 }

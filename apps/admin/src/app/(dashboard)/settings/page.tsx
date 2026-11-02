@@ -20,6 +20,11 @@ const settingsLinks = [
     title: 'SEO',
     description: 'Edit robots.txt and manage 301/302 redirects',
   },
+  {
+    href: '/settings/localization',
+    title: 'Localization',
+    description: 'Choose the locales available in content editors',
+  },
 ];
 
 export default function SettingsPage() {

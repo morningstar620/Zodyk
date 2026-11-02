@@ -28,6 +28,11 @@ export interface ISeoSettings {
   robotsTxt?: string;
 }
 
+export interface ILocalizationSettings {
+  defaultLocale: string;
+  locales: string[];
+}
+
 export interface IPlatformSettings extends Document {
   tenantId: string;
   media?: {
@@ -35,6 +40,7 @@ export interface IPlatformSettings extends Document {
   };
   payments?: IPaymentsSettings;
   seo?: ISeoSettings;
+  localization?: ILocalizationSettings;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -78,6 +84,10 @@ const platformSettingsSchema = new Schema<IPlatformSettings>(
     payments: paymentsSettingsSchema,
     seo: {
       robotsTxt: { type: String },
+    },
+    localization: {
+      defaultLocale: { type: String, default: 'en' },
+      locales: { type: [String], default: ['en', 'fr', 'es', 'de'] },
     },
   },
   { timestamps: true },

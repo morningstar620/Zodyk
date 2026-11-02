@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { MetaEntryForm } from '@/components/content/MetaEntryForm';
+import type { EntityTargetOption } from '@/components/content/entity-targets';
+import { useActiveContentLocale } from '@/components/content/use-content-locales';
 import { PageBreadcrumbs } from '@/components/meta-objects/page-breadcrumbs';
 import { MetaEntryFormSkeleton } from '@/components/skeletons';
 
@@ -19,26 +21,38 @@ export default function NewMetaEntryPage() {
   const [fields, setFields] = useState<MetaFieldDefinition[]>([]);
   const [data, setData] = useState<Record<string, unknown>>({});
   const [translations, setTranslations] = useState<Record<string, Record<string, unknown>>>({});
-  const [activeLocale, setActiveLocale] = useState('en');
+  const { locales, defaultLocale, activeLocale, setActiveLocale } = useActiveContentLocale();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [metaObjects, setMetaObjects] = useState<{ slug: string; name: string }[]>([]);
+  const [entityTargets, setEntityTargets] = useState<EntityTargetOption[]>([]);
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/v1/meta-objects/${slug}`).then((r) => r.json()),
       fetch('/api/v1/meta-objects').then((r) => r.json()),
-    ]).then(([type, types]) => {
+      fetch('/api/v1/system-entities').then(async (r) => (r.ok ? r.json() : [])),
+    ]).then(([type, types, systemTypes]) => {
       setTypeName(type.name ?? slug);
       setFieldGroups(type.fieldGroups ?? []);
       setFields(type.fields ?? []);
-      setMetaObjects(
-        (Array.isArray(types) ? types : []).map((t: { slug: string; name: string }) => ({
+      const metaTargets: EntityTargetOption[] = (Array.isArray(types) ? types : []).map(
+        (t: { slug: string; name: string }) => ({
           slug: t.slug,
           name: t.name,
-        })),
+          category: 'meta_object' as const,
+        }),
       );
+      const systemTargets: EntityTargetOption[] = (
+        Array.isArray(systemTypes) ? systemTypes : []
+      ).map((t: { slug: string; name: string }) => ({
+        slug: t.slug,
+        name: t.name,
+        category: 'system' as const,
+      }));
+      setEntityTargets([...metaTargets, ...systemTargets]);
+      setMetaObjects(metaTargets.map((t) => ({ slug: t.slug, name: t.name })));
       setLoading(false);
     });
   }, [slug]);
@@ -52,7 +66,7 @@ export default function NewMetaEntryPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         status,
-        locale: 'en',
+        locale: defaultLocale,
         data,
         translations,
       }),
@@ -108,7 +122,8 @@ export default function NewMetaEntryPage() {
         fields={fields}
         data={data}
         translations={translations}
-        defaultLocale="en"
+        locales={locales}
+        defaultLocale={defaultLocale}
         activeLocale={activeLocale}
         onLocaleChange={setActiveLocale}
         onChange={(d, t) => {
@@ -116,6 +131,7 @@ export default function NewMetaEntryPage() {
           setTranslations(t);
         }}
         metaObjects={metaObjects}
+        entityTargets={entityTargets}
       />
 
       <Link
