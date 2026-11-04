@@ -29,6 +29,7 @@ describe('API token permissions', () => {
 
   it('restricts an admin token to its scopes', async () => {
     const session = await verifyApiToken('zodyk_live_test');
+    expect(session?.authMethod).toBe('api-token');
     expect(session?.permissions).toEqual(['media:read']);
     expect(hasPermission(session!, 'users:create')).toBe(false);
     expect(hasPermission(session!, 'media:read')).toBe(true);

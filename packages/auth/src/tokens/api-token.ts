@@ -120,6 +120,7 @@ export async function verifyApiToken(token: string): Promise<AuthSession | null>
   await apiToken.save();
 
   return {
+    authMethod: 'api-token',
     userId: user._id.toString(),
     email: user.email,
     name: user.name,

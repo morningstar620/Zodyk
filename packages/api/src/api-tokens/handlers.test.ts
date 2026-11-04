@@ -54,12 +54,12 @@ describe('API token authorization', () => {
     expect(mocks.revoke).not.toHaveBeenCalled();
   });
 
-  it('requires authentication and permission to revoke an owned token', async () => {
+  it('requires authentication but allows an owner without create permission to revoke', async () => {
     await expect(deleteApiToken(null, 'token')).rejects.toMatchObject({ status: 401 });
-    await expect(deleteApiToken({ ...session, permissions: [] }, 'token')).rejects.toMatchObject({
-      status: 403,
+    await expect(deleteApiToken({ ...session, permissions: [] }, 'token')).resolves.toEqual({
+      success: true,
     });
-    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.revoke).toHaveBeenCalledWith('token', 'owner');
   });
 
   it('allows delete permission to revoke another user token', async () => {

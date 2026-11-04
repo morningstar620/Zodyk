@@ -78,10 +78,7 @@ export async function deleteApiToken(session: AuthSession | null, id: string, ip
   if (!token || token.revokedAt) throw new AuthError('Token not found', 404);
 
   const canDeleteAll = hasPermission(session!, 'api_tokens:delete');
-  if (
-    !canDeleteAll &&
-    (token.userId.toString() !== session!.userId || !hasPermission(session!, 'api_tokens:create'))
-  ) {
+  if (!canDeleteAll && token.userId.toString() !== session!.userId) {
     throw new AuthError('Insufficient permissions', 403);
   }
 

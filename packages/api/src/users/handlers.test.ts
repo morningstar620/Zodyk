@@ -24,10 +24,12 @@ vi.mock('@zodyk/database', () => ({
 vi.mock('@zodyk/auth', async () => {
   const { AuthError, requirePermission } = await import('../../../auth/src/rbac/middleware');
   const { canAssignRoles } = await import('../../../auth/src/rbac/role-hierarchy');
+  const { hasPermission } = await import('../../../auth/src/rbac/check');
   return {
     AuthError,
     requirePermission,
     canAssignRoles,
+    hasPermission,
     hashPassword: mocks.hashPassword,
     logAuditEvent: mocks.logAuditEvent,
   };
@@ -103,6 +105,39 @@ describe('user role assignment', () => {
 
     expect(created.roleIds).toEqual(['role-editor']);
     expect(mocks.userCreate).toHaveBeenCalled();
+  });
+
+  it('rejects a limited API token assigning a role with broader permissions', async () => {
+    mocks.roleFind.mockReturnValueOnce(
+      lean([{ slug: 'admin', permissions: ['users:*', 'payments:*'] }]),
+    );
+    await expect(
+      createUser(
+        { ...adminSession, authMethod: 'api-token', permissions: ['users:create'] },
+        {
+          name: 'New Admin',
+          email: 'new@example.com',
+          password: 'Password1!',
+          roleIds: ['role-admin'],
+          status: 'active',
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a limited API token promoting an existing user', async () => {
+    const save = vi.fn();
+    mocks.userFindOne.mockResolvedValue({ email: 'user@example.com', roleIds: [], save });
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'admin', permissions: ['payments:*'] }]));
+    await expect(
+      updateUser(
+        { ...adminSession, authMethod: 'api-token', permissions: ['users:update'] },
+        'user-2',
+        { roleIds: ['role-admin'] },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('rejects a role update that grants super admin', async () => {

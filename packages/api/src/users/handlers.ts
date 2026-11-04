@@ -8,6 +8,7 @@ import {
   AuthError,
   canAssignRoles,
   hashPassword,
+  hasPermission,
   logAuditEvent,
   requirePermission,
   type AuthSession,
@@ -20,6 +21,14 @@ async function assertCanAssignRoles(session: AuthSession, roleIds: string[]) {
     _id: { $in: roleIds },
     tenantId: DEFAULT_TENANT_ID,
   }).lean();
+  if (
+    session.authMethod === 'api-token' &&
+    targetRoles.some((role) =>
+      role.permissions.some((permission) => !hasPermission(session, permission)),
+    )
+  ) {
+    throw new AuthError('Cannot assign permissions outside the token scope', 403);
+  }
   const actor = await User.findById(session.userId).lean();
   const actorRoles = actor
     ? await Role.find({

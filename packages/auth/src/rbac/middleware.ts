@@ -11,6 +11,7 @@ export class AuthError extends Error {
 }
 
 export interface AuthSession extends PermissionSubject {
+  authMethod?: 'api-token';
   userId: string;
   email: string;
   name: string;
