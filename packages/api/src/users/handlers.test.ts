@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   userCreate: vi.fn(),
   roleFind: vi.fn(),
   hashPassword: vi.fn(async () => 'hashed'),
+  requestPasswordReset: vi.fn(async () => {}),
   logAuditEvent: vi.fn(async () => {}),
 }));
 
@@ -31,12 +32,13 @@ vi.mock('@zodyk/auth', async () => {
     canAssignRoles,
     hasPermission,
     hashPassword: mocks.hashPassword,
+    requestPasswordReset: mocks.requestPasswordReset,
     logAuditEvent: mocks.logAuditEvent,
   };
 });
 
 import { AuthError } from '@zodyk/auth';
-import { createUser, updateUser } from './handlers';
+import { adminResetPassword, createUser, updateUser } from './handlers';
 
 const adminSession = {
   userId: 'actor-1',
@@ -44,7 +46,7 @@ const adminSession = {
   name: 'Admin',
   tenantId: 'default',
   roleIds: ['role-admin'],
-  permissions: ['users:*'],
+  permissions: ['users:*', 'pages:*'],
 };
 
 function lean<T>(value: T) {
@@ -59,6 +61,7 @@ describe('user role assignment', () => {
     mocks.userCreate.mockReset();
     mocks.roleFind.mockReset();
     mocks.hashPassword.mockClear();
+    mocks.requestPasswordReset.mockClear();
     mocks.logAuditEvent.mockClear();
   });
 
@@ -129,7 +132,9 @@ describe('user role assignment', () => {
   it('rejects a limited API token promoting an existing user', async () => {
     const save = vi.fn();
     mocks.userFindOne.mockResolvedValue({ email: 'user@example.com', roleIds: [], save });
-    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'admin', permissions: ['payments:*'] }]));
+    mocks.roleFind
+      .mockReturnValueOnce(lean([]))
+      .mockReturnValueOnce(lean([{ slug: 'admin', permissions: ['payments:*'] }]));
     await expect(
       updateUser(
         { ...adminSession, authMethod: 'api-token', permissions: ['users:update'] },
@@ -150,6 +155,7 @@ describe('user role assignment', () => {
       save,
     });
     mocks.roleFind
+      .mockReturnValueOnce(lean([{ slug: 'editor', permissions: ['pages:*'] }]))
       .mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]))
       .mockReturnValueOnce(lean([{ slug: 'admin', permissions: ['users:*'] }]));
     mocks.userFindById.mockReturnValue(lean({ roleIds: ['role-admin'] }));
@@ -158,5 +164,25 @@ describe('user role assignment', () => {
       updateUser(adminSession, 'user-2', { roleIds: ['role-super'] }),
     ).rejects.toMatchObject({ status: 403 });
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'api-token'] as const)(
+    'rejects a %s session changing a more privileged user email',
+    async (authMethod) => {
+      const save = vi.fn();
+      mocks.userFindOne.mockResolvedValue({ email: 'root@example.com', roleIds: ['root'], save });
+      mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]));
+      await expect(
+        updateUser({ ...adminSession, authMethod }, 'root', { email: 'other@example.com' }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(save).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects password reset for a user with broader permissions', async () => {
+    mocks.userFindOne.mockResolvedValue({ email: 'root@example.com', roleIds: ['root'] });
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]));
+    await expect(adminResetPassword(adminSession, 'root')).rejects.toMatchObject({ status: 403 });
+    expect(mocks.requestPasswordReset).not.toHaveBeenCalled();
   });
 });

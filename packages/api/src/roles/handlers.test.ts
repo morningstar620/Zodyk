@@ -31,4 +31,11 @@ describe('role delegation by API tokens', () => {
       status: 403,
     });
   });
+
+  it('rejects broader role creation for browser sessions too', async () => {
+    const browserSession = { ...tokenSession, authMethod: undefined };
+    await expect(
+      createRole(browserSession, { name: 'Admin', slug: 'admin', permissions: ['users:*'] }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
 });

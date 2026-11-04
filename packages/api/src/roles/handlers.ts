@@ -49,10 +49,7 @@ export async function getRole(session: AuthSession | null, id: string) {
 export async function createRole(session: AuthSession | null, body: unknown, ip?: string) {
   requirePermission(session, 'roles:create');
   const input = createRoleSchema.parse(body);
-  if (
-    session!.authMethod === 'api-token' &&
-    input.permissions.some((p) => !hasPermission(session!, p))
-  ) {
+  if (input.permissions.some((p) => !hasPermission(session!, p))) {
     throw new AuthError('Cannot grant permissions outside the token scope', 403);
   }
 
@@ -99,10 +96,7 @@ export async function updateRole(
 ) {
   requirePermission(session, 'roles:update');
   const input = updateRoleSchema.parse(body);
-  if (
-    session!.authMethod === 'api-token' &&
-    input.permissions?.some((p) => !hasPermission(session!, p))
-  ) {
+  if (input.permissions?.some((p) => !hasPermission(session!, p))) {
     throw new AuthError('Cannot grant permissions outside the token scope', 403);
   }
 
