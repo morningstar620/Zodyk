@@ -2,18 +2,7 @@ import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import { connectDatabase, getModels } from '@zodyk/database';
 import { normalizeRedirectPath, resolveRedirect, type RedirectStatusCode } from '@zodyk/seo';
 import { NextResponse } from 'next/server';
-
-function toAbsolute(location: string, requestUrl: string): string {
-  const request = new URL(requestUrl);
-  const absolute = /^https?:\/\//i.test(location)
-    ? location
-    : new URL(location, request.origin).toString();
-  const destination = new URL(absolute);
-  if (request.search && !destination.search) {
-    destination.search = request.search;
-  }
-  return destination.toString();
-}
+import { toAbsolute } from './redirect-url';
 
 /** Resolve an admin redirect before the theme renders. Returns null when no rule matches. */
 export async function lookupStorefrontRedirect(
