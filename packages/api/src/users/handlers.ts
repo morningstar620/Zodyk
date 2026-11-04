@@ -256,8 +256,21 @@ export async function deleteUser(session: AuthSession | null, id: string, ip?: s
   await connectDatabase(uri);
   const { User } = getModels();
 
+  const target = await User.findOne({
+    _id: id,
+    tenantId: DEFAULT_TENANT_ID,
+    deletedAt: { $exists: false },
+  }).lean();
+  if (!target) throw new AuthError('User not found', 404);
+  await assertRolePermissionsCovered(session!, target.roleIds.map(String));
+
   const user = await User.findOneAndUpdate(
-    { _id: id, tenantId: DEFAULT_TENANT_ID, deletedAt: { $exists: false } },
+    {
+      _id: id,
+      tenantId: DEFAULT_TENANT_ID,
+      deletedAt: { $exists: false },
+      roleIds: target.roleIds,
+    },
     { status: 'suspended', deletedAt: new Date() },
     { new: true },
   );

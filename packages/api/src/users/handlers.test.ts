@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   userFindOne: vi.fn(),
   userFindById: vi.fn(),
+  userFindOneAndUpdate: vi.fn(),
   userCreate: vi.fn(),
   roleFind: vi.fn(),
   hashPassword: vi.fn(async () => 'hashed'),
@@ -16,6 +17,7 @@ vi.mock('@zodyk/database', () => ({
     User: {
       findOne: mocks.userFindOne,
       findById: mocks.userFindById,
+      findOneAndUpdate: mocks.userFindOneAndUpdate,
       create: mocks.userCreate,
     },
     Role: { find: mocks.roleFind },
@@ -38,7 +40,7 @@ vi.mock('@zodyk/auth', async () => {
 });
 
 import { AuthError } from '@zodyk/auth';
-import { adminResetPassword, createUser, updateUser } from './handlers';
+import { adminResetPassword, createUser, deleteUser, updateUser } from './handlers';
 
 const adminSession = {
   userId: 'actor-1',
@@ -58,6 +60,7 @@ describe('user role assignment', () => {
     process.env.MONGODB_URI = 'mongodb://localhost/zodyk-test';
     mocks.userFindOne.mockReset();
     mocks.userFindById.mockReset();
+    mocks.userFindOneAndUpdate.mockReset();
     mocks.userCreate.mockReset();
     mocks.roleFind.mockReset();
     mocks.hashPassword.mockClear();
@@ -184,6 +187,25 @@ describe('user role assignment', () => {
     mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]));
     await expect(adminResetPassword(adminSession, 'root')).rejects.toMatchObject({ status: 403 });
     expect(mocks.requestPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('rejects deletion of a user with broader permissions', async () => {
+    mocks.userFindOne.mockReturnValueOnce(lean({ roleIds: ['root'] }));
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]));
+    await expect(deleteUser(adminSession, 'root')).rejects.toMatchObject({ status: 403 });
+    expect(mocks.userFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('allows deletion when the target permissions are covered', async () => {
+    mocks.userFindOne.mockReturnValueOnce(lean({ roleIds: ['editor'] }));
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'editor', permissions: ['pages:*'] }]));
+    mocks.userFindOneAndUpdate.mockResolvedValue({ email: 'editor@example.com' });
+    await expect(deleteUser(adminSession, 'editor-id')).resolves.toEqual({ success: true });
+    expect(mocks.userFindOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ roleIds: ['editor'] }),
+      expect.any(Object),
+      { new: true },
+    );
   });
 
   it('allows a super admin to request a reset for another super admin', async () => {
