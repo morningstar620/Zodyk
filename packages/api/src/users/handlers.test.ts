@@ -185,4 +185,13 @@ describe('user role assignment', () => {
     await expect(adminResetPassword(adminSession, 'root')).rejects.toMatchObject({ status: 403 });
     expect(mocks.requestPasswordReset).not.toHaveBeenCalled();
   });
+
+  it('allows a super admin to request a reset for another super admin', async () => {
+    mocks.userFindOne.mockResolvedValue({ email: 'root@example.com', roleIds: ['root'] });
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]));
+    await expect(
+      adminResetPassword({ ...adminSession, permissions: ['*'] }, 'root'),
+    ).resolves.toEqual({ success: true });
+    expect(mocks.requestPasswordReset).toHaveBeenCalledWith('root@example.com');
+  });
 });
