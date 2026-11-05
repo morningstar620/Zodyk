@@ -343,14 +343,16 @@ export async function getThemeAssetFile(
     previewToken?: string;
     tenantId?: string;
   } = {},
-): Promise<{ content: string; contentType: string } | null> {
+): Promise<{ content: string; contentType: string; isPreview: boolean } | null> {
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const path = assetPath.startsWith('assets/') ? assetPath : `assets/${assetPath}`;
   const { Theme } = await ensureDb();
 
   let themeId: string | null = null;
+  let isPreview = false;
 
   if (options.previewThemeId && options.previewToken) {
+    isPreview = true;
     const theme = await Theme.findOne({
       _id: options.previewThemeId,
       tenantId,
@@ -375,10 +377,12 @@ export async function getThemeAssetFile(
   if (cached) {
     const content = cached.files[path];
     if (content == null) return null;
-    return { content, contentType: guessContentType(path) };
+    return { content, contentType: guessContentType(path), isPreview };
   }
 
-  return getThemeFile(themeId, path, tenantId);
+  const file = await getThemeFile(themeId, path, tenantId);
+  if (!file) return null;
+  return { content: file.content, contentType: file.contentType, isPreview };
 }
 
 export async function installThemeFromDirectory(

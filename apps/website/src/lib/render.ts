@@ -331,6 +331,7 @@ export async function getThemeAsset(
 ): Promise<{
   content: string;
   contentType: string;
+  isPreview: boolean;
 } | null> {
   let previewThemeId = options.previewThemeId;
   let previewToken = options.previewToken;

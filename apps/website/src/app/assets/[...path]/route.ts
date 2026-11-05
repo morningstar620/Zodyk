@@ -1,3 +1,4 @@
+import { themeAssetCacheControl } from '@/lib/asset-cache';
 import { getThemeAsset } from '@/lib/render';
 import { NextResponse } from 'next/server';
 
@@ -18,7 +19,7 @@ export async function GET(
   return new NextResponse(asset.content, {
     headers: {
       'Content-Type': asset.contentType,
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': themeAssetCacheControl(asset.isPreview),
     },
   });
 }
