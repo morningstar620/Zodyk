@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { AuthCardSkeleton } from '@/components/skeletons';
 import { useForm } from 'react-hook-form';
+import { safeCallbackUrl } from '@/lib/safe-callback-url';
 
 type MfaForm = z.infer<typeof mfaVerifySchema>;
 
@@ -26,7 +27,7 @@ function MfaLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mfaToken = searchParams.get('token') ?? '';
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/';
+  const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'));
   const [error, setError] = useState<string | null>(null);
 
   const {

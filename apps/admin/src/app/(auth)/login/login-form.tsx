@@ -19,13 +19,14 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { safeCallbackUrl } from '@/lib/safe-callback-url';
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginForm({ magicLinkEnabled }: { magicLinkEnabled: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/';
+  const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'));
   const [error, setError] = useState<string | null>(
     searchParams.get('error') === 'AccessDenied'
       ? 'Sign-in was denied. New accounts are only created when registration is open, and an existing account can be linked only while you are signed in with a verified matching email.'
