@@ -18,11 +18,15 @@ release order is:
 2. Run this migration from a checkout containing both changes.
 3. Deploy the delegation checks.
 
-The migration compares each built-in Admin role (`slug: admin`,
-`isSystem: {$ne: false}`) against `DEFAULT_ROLE_PERMISSIONS.admin` and adds only
-the missing permissions. It never removes permissions, never creates a role, and
-never touches custom roles. A second run performs no writes. It covers every
-tenant that has a built-in Admin role.
+The migration compares roles with `slug: admin` and `isSystem: {$ne: false}`
+against `DEFAULT_ROLE_PERMISSIONS.admin` and adds only the missing permissions.
+It never removes permissions and never creates a role. Roles explicitly marked
+`isSystem: false` are left alone; a legacy row with no `isSystem` field is
+treated as built-in and upgraded to `isSystem: true`. A second run performs no
+writes. It covers every tenant with a built-in Admin role.
+
+Do not deploy the delegation checks before the migration reports clean: Admin
+lacks `media:*` until then and cannot manage Editor, Author, or Viewer.
 
 Use the intended `MONGODB_URI` and back up the database first:
 

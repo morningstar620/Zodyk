@@ -12,6 +12,10 @@ export interface AdminPermissionPlan {
  * Admin roles. The migration is additive and idempotent: existing grants are
  * never removed, and a second run performs no writes.
  *
+ * Roles explicitly marked isSystem: false are skipped. A legacy row with no
+ * isSystem field is treated as built-in and upgraded, so a pre-flag custom
+ * role using the admin slug would also be included.
+ *
  * It only runs once PR #59 (the Admin `media:*` default) is part of the checked
  * out code. That guard prevents a later `seedRoles()` from silently removing a
  * grant that the defaults do not yet contain.
