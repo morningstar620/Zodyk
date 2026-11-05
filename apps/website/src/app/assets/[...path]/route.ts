@@ -1,6 +1,5 @@
-import { themeAssetCacheControl } from '@/lib/asset-cache';
+import { themeAssetResponse } from '@/lib/asset-cache';
 import { getThemeAsset } from '@/lib/render';
-import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
@@ -13,13 +12,5 @@ export async function GET(
     previewThemeId: url.searchParams.get('preview_theme') ?? undefined,
     previewToken: url.searchParams.get('preview_token') ?? undefined,
   });
-  if (!asset) {
-    return new NextResponse('Not found', { status: 404 });
-  }
-  return new NextResponse(asset.content, {
-    headers: {
-      'Content-Type': asset.contentType,
-      'Cache-Control': themeAssetCacheControl(asset.isPreview),
-    },
-  });
+  return themeAssetResponse(asset);
 }

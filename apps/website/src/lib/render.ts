@@ -329,6 +329,7 @@ export async function getThemeAsset(
   assetPath: string,
   options: RenderSiteOptions = {},
 ): Promise<{
+  path: string;
   content: string;
   contentType: string;
   isPreview: boolean;
