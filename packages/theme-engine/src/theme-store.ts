@@ -335,6 +335,13 @@ export async function loadThemeByPreview(
   return loadThemeById(theme._id.toString(), tenantId);
 }
 
+export function hasPreviewTheme(options: {
+  previewThemeId?: string;
+  previewToken?: string;
+}): boolean {
+  return Boolean(options.previewThemeId && options.previewToken);
+}
+
 /** Read a single theme asset without loading the full theme file map. */
 export async function getThemeAssetFile(
   assetPath: string,
@@ -343,14 +350,20 @@ export async function getThemeAssetFile(
     previewToken?: string;
     tenantId?: string;
   } = {},
-): Promise<{ content: string; contentType: string } | null> {
+): Promise<{
+  path: string;
+  content: string;
+  contentType: string;
+  isPreview: boolean;
+} | null> {
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const path = assetPath.startsWith('assets/') ? assetPath : `assets/${assetPath}`;
   const { Theme } = await ensureDb();
 
   let themeId: string | null = null;
+  const isPreview = hasPreviewTheme(options);
 
-  if (options.previewThemeId && options.previewToken) {
+  if (isPreview) {
     const theme = await Theme.findOne({
       _id: options.previewThemeId,
       tenantId,
@@ -375,10 +388,17 @@ export async function getThemeAssetFile(
   if (cached) {
     const content = cached.files[path];
     if (content == null) return null;
-    return { content, contentType: guessContentType(path) };
+    return { path, content, contentType: guessContentType(path), isPreview };
   }
 
-  return getThemeFile(themeId, path, tenantId);
+  const file = await getThemeFile(themeId, path, tenantId);
+  if (!file) return null;
+  return {
+    path: file.path,
+    content: file.content,
+    contentType: file.contentType,
+    isPreview,
+  };
 }
 
 export async function installThemeFromDirectory(
