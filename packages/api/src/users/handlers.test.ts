@@ -40,6 +40,7 @@ vi.mock('@zodyk/auth', async () => {
 });
 
 import { AuthError } from '@zodyk/auth';
+import { DEFAULT_ROLE_PERMISSIONS } from '@zodyk/core';
 import { adminResetPassword, createUser, deleteUser, updateUser } from './handlers';
 
 const adminSession = {
@@ -112,6 +113,37 @@ describe('user role assignment', () => {
     expect(created.roleIds).toEqual(['role-editor']);
     expect(mocks.userCreate).toHaveBeenCalled();
   });
+
+  it.each(['editor', 'author', 'viewer'] as const)(
+    'allows Admin with the PR #59 media grant to assign the actual default %s role',
+    async (role) => {
+      const permissions = [...DEFAULT_ROLE_PERMISSIONS.admin, 'media:*'];
+      mocks.roleFind
+        .mockReturnValueOnce(lean([{ slug: role, permissions: DEFAULT_ROLE_PERMISSIONS[role] }]))
+        .mockReturnValueOnce(lean([{ slug: 'admin', permissions }]));
+      mocks.userFindById.mockReturnValue(lean({ roleIds: ['role-admin'] }));
+      mocks.userFindOne.mockResolvedValue(null);
+      mocks.userCreate.mockResolvedValue({
+        _id: { toString: () => 'created' },
+        name: 'User',
+        email: 'user@example.com',
+        status: 'active',
+        roleIds: [{ toString: () => `role-${role}` }],
+      });
+      await expect(
+        createUser(
+          { ...adminSession, permissions },
+          {
+            name: 'User',
+            email: 'user@example.com',
+            password: 'Password1!',
+            roleIds: [`role-${role}`],
+            status: 'active',
+          },
+        ),
+      ).resolves.toMatchObject({ roleIds: [`role-${role}`] });
+    },
+  );
 
   it('rejects a limited API token assigning a role with broader permissions', async () => {
     mocks.roleFind.mockReturnValueOnce(
