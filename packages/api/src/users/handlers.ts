@@ -8,18 +8,33 @@ import {
   AuthError,
   canAssignRoles,
   hashPassword,
+  hasPermission,
   logAuditEvent,
   requirePermission,
   type AuthSession,
 } from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
 
-async function assertCanAssignRoles(session: AuthSession, roleIds: string[]) {
-  const { User, Role } = getModels();
+async function assertRolePermissionsCovered(session: AuthSession, roleIds: string[]) {
+  const { Role } = getModels();
   const targetRoles = await Role.find({
     _id: { $in: roleIds },
     tenantId: DEFAULT_TENANT_ID,
   }).lean();
+  if (
+    targetRoles.length !== new Set(roleIds.map(String)).size ||
+    targetRoles.some((role) =>
+      role.permissions.some((permission) => !hasPermission(session, permission)),
+    )
+  ) {
+    throw new AuthError('Insufficient permissions for target roles', 403);
+  }
+  return targetRoles;
+}
+
+async function assertCanAssignRoles(session: AuthSession, roleIds: string[]) {
+  const { User, Role } = getModels();
+  const targetRoles = await assertRolePermissionsCovered(session, roleIds);
   const actor = await User.findById(session.userId).lean();
   const actorRoles = actor
     ? await Role.find({
@@ -191,6 +206,8 @@ export async function updateUser(
   });
   if (!user) throw new AuthError('User not found', 404);
 
+  await assertRolePermissionsCovered(session!, user.roleIds.map(String));
+
   if (input.email && input.email.toLowerCase() !== user.email) {
     const existing = await User.findOne({
       email: input.email.toLowerCase(),
@@ -239,8 +256,21 @@ export async function deleteUser(session: AuthSession | null, id: string, ip?: s
   await connectDatabase(uri);
   const { User } = getModels();
 
+  const target = await User.findOne({
+    _id: id,
+    tenantId: DEFAULT_TENANT_ID,
+    deletedAt: { $exists: false },
+  }).lean();
+  if (!target) throw new AuthError('User not found', 404);
+  await assertRolePermissionsCovered(session!, target.roleIds.map(String));
+
   const user = await User.findOneAndUpdate(
-    { _id: id, tenantId: DEFAULT_TENANT_ID, deletedAt: { $exists: false } },
+    {
+      _id: id,
+      tenantId: DEFAULT_TENANT_ID,
+      deletedAt: { $exists: false },
+      roleIds: target.roleIds,
+    },
     { status: 'suspended', deletedAt: new Date() },
     { new: true },
   );
@@ -273,6 +303,8 @@ export async function adminResetPassword(session: AuthSession | null, id: string
     deletedAt: { $exists: false },
   });
   if (!user) throw new AuthError('User not found', 404);
+
+  await assertRolePermissionsCovered(session!, user.roleIds.map(String));
 
   await requestPasswordReset(user.email);
 

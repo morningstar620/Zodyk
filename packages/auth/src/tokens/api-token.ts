@@ -1,10 +1,22 @@
 import { connectDatabase, getModels } from '@zodyk/database';
 import crypto from 'crypto';
 import { hashToken } from '../security/encryption';
-import { resolveUserPermissions } from '../rbac/check';
+import { hasPermission, resolveUserPermissions } from '../rbac/check';
 import type { AuthSession } from '../rbac/middleware';
 
 const TOKEN_PREFIX = 'zodyk_live_';
+
+/** Return only permission patterns granted by both the role and token scopes. */
+export function intersectTokenPermissions(roles: string[], scopes: string[]): string[] {
+  const effective = new Set<string>();
+  for (const role of roles) {
+    for (const scope of scopes) {
+      if (hasPermission({ permissions: [role] }, scope)) effective.add(scope);
+      else if (hasPermission({ permissions: [scope] }, role)) effective.add(role);
+    }
+  }
+  return [...effective];
+}
 
 export interface GeneratedToken {
   id: string;
@@ -12,6 +24,7 @@ export interface GeneratedToken {
   prefix: string;
   name: string;
   scopes: string[];
+  effectivePermissions: string[];
   expiresAt?: Date;
 }
 
@@ -68,6 +81,7 @@ export async function generateApiToken(
     prefix,
     name,
     scopes,
+    effectivePermissions: intersectTokenPermissions(permissions, scopes),
     expiresAt,
   };
 }
@@ -93,24 +107,26 @@ export async function verifyApiToken(token: string): Promise<AuthSession | null>
   const user = await User.findById(apiToken.userId);
   if (!user || user.status !== 'active' || user.deletedAt) return null;
 
-  apiToken.lastUsedAt = new Date();
-  await apiToken.save();
-
   const roleIds = user.roleIds.map((id) => id.toString());
   const rolePermissions = await resolveUserPermissions(roleIds, async (ids) => {
     const roles = await Role.find({ _id: { $in: ids } });
     return roles.map((r) => ({ permissions: r.permissions }));
   });
 
-  const permissions = new Set([...rolePermissions, ...apiToken.scopes]);
+  const permissions = intersectTokenPermissions(rolePermissions, apiToken.scopes);
+  if (permissions.length === 0) return null;
+
+  apiToken.lastUsedAt = new Date();
+  await apiToken.save();
 
   return {
+    authMethod: 'api-token',
     userId: user._id.toString(),
     email: user.email,
     name: user.name,
     tenantId: user.tenantId,
     roleIds,
-    permissions: Array.from(permissions),
+    permissions,
   };
 }
 
