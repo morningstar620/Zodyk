@@ -26,6 +26,14 @@ describe('safeAssetUrl', () => {
     expect(safeAssetUrl('"><script>alert(1)</script>')).toBeNull();
     expect(safeAssetUrl('https://example.com/"><script>alert(1)</script>')).toBeNull();
   });
+
+  it('rejects control characters and embedded whitespace', () => {
+    expect(safeAssetUrl('/assets/theme\n.css')).toBeNull();
+    expect(safeAssetUrl('/assets/theme\t.css')).toBeNull();
+    expect(safeAssetUrl('/assets/theme\u0000.css')).toBeNull();
+    expect(safeAssetUrl('/assets/theme\u007f.css')).toBeNull();
+    expect(safeAssetUrl('https://cdn.example.com/theme .css')).toBeNull();
+  });
 });
 
 describe('Liquid asset filters', () => {
