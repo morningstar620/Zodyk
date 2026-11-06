@@ -15,7 +15,8 @@ export async function GET(
   if (!asset) {
     return new NextResponse('Not found', { status: 404 });
   }
-  return new NextResponse(asset.content, {
+  const body = typeof asset.content === 'string' ? asset.content : new Uint8Array(asset.content);
+  return new NextResponse(body, {
     headers: {
       'Content-Type': asset.contentType,
       'Cache-Control': 'public, max-age=3600',

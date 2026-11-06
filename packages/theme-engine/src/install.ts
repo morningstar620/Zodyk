@@ -1,15 +1,16 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { guessContentType, isTextThemeFile } from './storage/content-type';
 
-export function checksum(content: string): string {
+export function checksum(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
 export async function readThemeDirectory(
   rootDir: string,
-): Promise<Array<{ path: string; content: string; contentType: string }>> {
-  const files: Array<{ path: string; content: string; contentType: string }> = [];
+): Promise<Array<{ path: string; content: string | Buffer; contentType: string }>> {
+  const files: Array<{ path: string; content: string | Buffer; contentType: string }> = [];
 
   async function walk(dir: string): Promise<void> {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -21,10 +22,10 @@ export async function readThemeDirectory(
         continue;
       }
       const relPath = relative(rootDir, fullPath).replace(/\\/g, '/');
-      const content = await readFile(fullPath, 'utf8');
+      const raw = await readFile(fullPath);
       files.push({
         path: relPath,
-        content,
+        content: isTextThemeFile(relPath) ? raw.toString('utf8') : raw,
         contentType: guessContentType(relPath),
       });
     }
@@ -37,14 +38,6 @@ export async function readThemeDirectory(
 
   await walk(rootDir);
   return files;
-}
-
-function guessContentType(path: string): string {
-  if (path.endsWith('.json')) return 'application/json';
-  if (path.endsWith('.css')) return 'text/css';
-  if (path.endsWith('.js')) return 'application/javascript';
-  if (path.endsWith('.liquid')) return 'text/x-liquid';
-  return 'text/plain';
 }
 
 export function filesToMap(

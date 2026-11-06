@@ -9,6 +9,7 @@ import {
 } from './create-theme-storage';
 import { LocalFsStorage } from './local-storage';
 import { assertWithinThemeRoot, themePath, themeRoot } from './theme-path';
+import { extractThemeZip } from '../zip';
 import type { ThemeRef } from './types';
 
 describe('resolveThemeStorageKind', () => {
@@ -111,6 +112,42 @@ describe('LocalFsStorage', () => {
       { path: 'layout/theme.liquid', content: 'x' },
     ]);
     expect(installed.files.every((f) => f.storageKey === f.path)).toBe(true);
+  });
+
+  it('installs, reads, and exports binary assets without corruption', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x01]);
+    const installed = await storage.installTheme(theme, [
+      { path: 'layout/theme.liquid', content: 'x' },
+      { path: 'config/settings_schema.json', content: '[]' },
+      { path: 'assets/logo.png', content: png },
+    ]);
+    expect(installed.files.find((f) => f.path === 'assets/logo.png')?.contentType).toBe(
+      'image/png',
+    );
+
+    const bytes = await storage.readFileBuffer(theme, 'assets/logo.png');
+    expect(bytes.equals(png)).toBe(true);
+
+    // Binary assets are not part of the text render map.
+    const map = await storage.loadTheme(theme);
+    expect(map['assets/logo.png']).toBeUndefined();
+    expect(map['layout/theme.liquid']).toBe('x');
+
+    const exported = await storage.exportTheme(
+      theme,
+      installed.files.map((f) => ({ path: f.path, storageKey: f.storageKey })),
+    );
+    const files = await extractThemeZip(exported);
+    const logo = files.find((f) => f.path === 'assets/logo.png');
+    expect((logo?.content as Buffer).equals(png)).toBe(true);
+  });
+
+  it('writeFile accepts binary content', async () => {
+    const bytes = Buffer.from([0x00, 0x01, 0x02, 0xff]);
+    const result = await storage.writeFile(theme, 'assets/data.bin', bytes);
+    expect(result.size).toBe(4);
+    expect(result.contentType).toBe('application/octet-stream');
+    expect((await storage.readFileBuffer(theme, 'assets/data.bin')).equals(bytes)).toBe(true);
   });
 
   it('duplicateTheme copies directory', async () => {

@@ -13,6 +13,15 @@ export async function readLocalThemeFile(
   return readFile(abs, 'utf8');
 }
 
+export async function readLocalThemeFileBuffer(
+  theme: ThemeRef,
+  relativePath: string,
+): Promise<Buffer | null> {
+  const abs = themePath(theme, relativePath);
+  if (!existsSync(abs)) return null;
+  return readFile(abs);
+}
+
 export async function listLocalThemeFiles(theme: ThemeRef): Promise<string[]> {
   const root = themeRoot(theme);
   if (!existsSync(root)) return [];
