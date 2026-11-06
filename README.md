@@ -2,7 +2,7 @@
 
 Open-source, self-hostable website operating system — modern CMS, themes, SEO, forms, and more.
 
-This repository is the **v1.0 Foundation scaffold**: monorepo structure, stub packages, and two Next.js apps ready for feature development.
+This repository is an active monorepo with three applications: a Next.js admin panel, a Next.js public website, and an Express REST API. Several platform packages are implemented; Forms, Workflow, and Notifications are currently planned stubs.
 
 ## Prerequisites
 
@@ -78,28 +78,30 @@ apps/
   admin/          # Administration panel (Next.js + NextAuth)
   website/        # Public website renderer (Next.js)
   api/            # REST API (Express) — Docker / self-hosted
-  website/        # Public site renderer (Next.js)
 
 packages/
   core/           # Shared types, Zod schemas, primitives
-  auth/           # Authentication & RBAC (stub)
+  auth/           # Authentication, sessions, and RBAC
   database/       # Mongoose connection helper
-  seo/            # SEO platform (stub)
-  media/          # Media library (stub)
-  liquid/         # Liquid template engine (stub)
-  workflow/       # Automation engine (stub)
-  forms/          # Form builder (stub)
-  notifications/  # Email/SMS/WhatsApp (stub)
+  seo/            # SEO metadata, sitemap, robots, and redirect helpers
+  media/          # Media library and storage
+  liquid/         # Liquid template rendering (isolated VM sandboxing is planned)
+  workflow/       # Planned stub
+  forms/          # Planned stub
+  notifications/  # Planned stub
   payments/       # Payment gateway layer (Stripe, Razorpay, Custom, …)
-  builder/        # Visual builder (stub)
-  theme-engine/   # Theme install/export (stub)
-  api/            # REST & GraphQL API (stub)
+  builder/        # Visual builder
+  theme-engine/   # Theme install, export, and storage
+  api/            # REST API handlers and routes
   shared-ui/      # Design system (shadcn-style components)
+  theme-language/ # Theme language support
+  theme-lsp/      # Theme language server
+  create-zodyk/   # Project creation CLI
 
 infrastructure/
   docker/         # Docker Compose for local dev
-  scripts/        # Seed & migration utilities (placeholder)
-  deployment/     # Vercel / K8s config stubs
+  scripts/        # Seed and migration utilities
+  deployment/     # Vercel config and Cloudflare CDN worker
 ```
 
 ## Scripts
@@ -112,6 +114,9 @@ infrastructure/
 | `pnpm typecheck` | Type-check across the workspace |
 | `pnpm docker:up` | Start MongoDB, Redis, and the API |
 | `pnpm docker:down` | Stop local Docker services |
+| `pnpm seed` | Create indexes, run seed-time migrations, and seed default data |
+| `pnpm migrate:themes-r2` | Migrate themes to Cloudflare R2 |
+| `pnpm migrate:remove-homepage` | Remove legacy homepage pages |
 
 ## Documentation
 
