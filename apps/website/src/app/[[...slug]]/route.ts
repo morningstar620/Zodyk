@@ -1,5 +1,6 @@
 import { hasAdminSession } from '@/lib/admin-session';
 import { resolveStorefrontAccess } from '@/lib/design-preview';
+import { renderErrorResponse } from '@/lib/error-page';
 import { lookupStorefrontRedirect } from '@/lib/redirects';
 import { renderSitePage } from '@/lib/render';
 import { formatServerTiming } from '@/lib/request-timing';
@@ -85,10 +86,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     });
   } catch (error) {
     console.error('[website] render failed:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error while rendering page';
-    return new NextResponse(`<h1>Site temporarily unavailable</h1><p>${message}</p>`, {
-      status: 500,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-    });
+    return renderErrorResponse();
   }
 }

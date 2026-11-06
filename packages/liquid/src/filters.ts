@@ -1,14 +1,63 @@
 import type { Liquid } from 'liquidjs';
 import type { DynamicSourceValue } from '@zodyk/core';
 
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+/** Escape a value before placing it inside an HTML attribute. */
+export function escapeHtmlAttribute(value: unknown): string {
+  return String(value).replace(/[&<>"']/g, (character) => HTML_ESCAPES[character]!);
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0)!;
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * Accept only http(s) or single-slash root-relative URLs. Reject
+ * protocol-relative URLs, backslashes, control characters, and characters
+ * that can break out of an HTML attribute.
+ */
+export function safeAssetUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const url = value.trim();
+  if (!url || hasControlCharacter(url) || /[<>"'`\\\s]/.test(url)) return null;
+
+  if (url.startsWith('/')) {
+    return url.startsWith('//') ? null : url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export function registerZodykFilters(engine: Liquid, locales: Record<string, string> = {}): void {
   engine.registerFilter('asset_url', (value: string) => `/assets/${value}`);
-  engine.registerFilter('stylesheet_tag', (url: string) =>
-    `<link rel="stylesheet" href="${url}">`,
-  );
-  engine.registerFilter('script_tag', (url: string) =>
-    `<script src="${url}" defer></script>`,
-  );
+  engine.registerFilter('stylesheet_tag', (url: string) => {
+    const safeUrl = safeAssetUrl(url);
+    return safeUrl
+      ? `<link rel="stylesheet" href="${escapeHtmlAttribute(safeUrl)}">`
+      : '';
+  });
+  engine.registerFilter('script_tag', (url: string) => {
+    const safeUrl = safeAssetUrl(url);
+    return safeUrl ? `<script src="${escapeHtmlAttribute(safeUrl)}" defer></script>` : '';
+  });
   engine.registerFilter('image_url', (value: unknown) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -33,8 +82,11 @@ export function registerZodykFilters(engine: Liquid, locales: Record<string, str
     const id = block.id ?? block.blockId;
     if (!id) return '';
     const sid = sectionId ?? block.section_id ?? block.sectionId;
-    const attrs = [`class="zodyk-block"`, `data-block-id="${String(id)}"`];
-    if (sid) attrs.push(`data-section-id="${String(sid)}"`);
+    const attrs = [
+      `class="zodyk-block"`,
+      `data-block-id="${escapeHtmlAttribute(id)}"`,
+    ];
+    if (sid) attrs.push(`data-section-id="${escapeHtmlAttribute(sid)}"`);
     return attrs.join(' ');
   });
 }

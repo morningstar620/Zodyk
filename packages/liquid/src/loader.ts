@@ -1,4 +1,5 @@
 import type { Liquid } from 'liquidjs';
+import { escapeHtmlAttribute, safeAssetUrl } from './filters';
 
 export interface ThemeFileMap {
   get(path: string): string | undefined;
@@ -17,23 +18,25 @@ export function createThemeFileMap(files: Record<string, string>): ThemeFileMap 
 export function registerThemeTags(engine: Liquid): void {
   engine.registerTag('stylesheet_tag', {
     parse(tagToken) {
-      const match = /\s*'([^']+)'|\"([^\"]+)\"/.exec(tagToken.args);
+      const match = /\s*'([^']+)'|\s*"([^"]+)"/.exec(tagToken.args);
       this.asset = match?.[1] ?? match?.[2] ?? '';
     },
     render(ctx, emitter) {
       void ctx;
-      emitter.write(`<link rel="stylesheet" href="/assets/${this.asset}">`);
+      const url = safeAssetUrl(`/assets/${this.asset}`);
+      if (url) emitter.write(`<link rel="stylesheet" href="${escapeHtmlAttribute(url)}">`);
     },
   });
 
   engine.registerTag('script_tag', {
     parse(tagToken) {
-      const match = /\s*'([^']+)'|\"([^\"]+)\"/.exec(tagToken.args);
+      const match = /\s*'([^']+)'|\s*"([^"]+)"/.exec(tagToken.args);
       this.asset = match?.[1] ?? match?.[2] ?? '';
     },
     render(ctx, emitter) {
       void ctx;
-      emitter.write(`<script src="/assets/${this.asset}" defer></script>`);
+      const url = safeAssetUrl(`/assets/${this.asset}`);
+      if (url) emitter.write(`<script src="${escapeHtmlAttribute(url)}" defer></script>`);
     },
   });
 }
