@@ -23,14 +23,26 @@ import {
   isImageMime,
   isStorageFullyConfigured,
   MediaNotConfiguredError,
+  MediaValidationError,
   moveInR2,
   reprocessMediaAsset,
   resolveFilenameForFormat,
   uploadToR2,
+  validateMediaUpload,
 } from '@zodyk/media';
 import type { IMediaAsset } from '@zodyk/database';
 
 const DEFAULT_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
+
+function throwMediaError(error: unknown): never {
+  if (error instanceof MediaNotConfiguredError) {
+    throw new AuthError(error.message, 503);
+  }
+  if (error instanceof MediaValidationError) {
+    throw new AuthError(error.message, 400);
+  }
+  throw error;
+}
 
 function deriveNewFilename(originalFilename: string, title?: string): string {
   const ext = originalFilename.match(/\.[^.]+$/)?.[0] ?? '.jpg';
@@ -236,12 +248,24 @@ export async function uploadMediaAsset(
   const title = (formData.get('title') as string | null) ?? undefined;
   const caption = (formData.get('caption') as string | null) ?? undefined;
 
+  const buffer = Buffer.from(await file.arrayBuffer());
+  let mimeType: string;
+  try {
+    ({ mimeType } = validateMediaUpload({
+      buffer,
+      filename: file.name,
+      declaredMimeType: file.type,
+    }));
+  } catch (error) {
+    throwMediaError(error);
+  }
+
   const { MediaAsset } = await ensureDb();
   const asset = await MediaAsset.create({
     filename: file.name,
     originalFilename: file.name,
-    mimeType: file.type || 'application/octet-stream',
-    size: file.size,
+    mimeType,
+    size: buffer.length,
     folder,
     r2Key: 'pending',
     variants: [],
@@ -251,11 +275,10 @@ export async function uploadMediaAsset(
   });
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
     const result = await uploadToR2({
       buffer,
       originalFilename: file.name,
-      mimeType: file.type || 'application/octet-stream',
+      mimeType,
       assetId: asset._id.toString(),
       folder,
     });
@@ -269,10 +292,7 @@ export async function uploadMediaAsset(
     await asset.save();
   } catch (error) {
     await MediaAsset.deleteOne({ _id: asset._id });
-    if (error instanceof MediaNotConfiguredError) {
-      throw new AuthError(error.message, 503);
-    }
-    throw error;
+    throwMediaError(error);
   }
 
   await logAuditEvent({
@@ -585,10 +605,7 @@ export async function transformMediaAsset(
     item.variants = result.variants;
     await item.save();
   } catch (error) {
-    if (error instanceof MediaNotConfiguredError) {
-      throw new AuthError(error.message, 503);
-    }
-    throw error;
+    throwMediaError(error);
   }
 
   await logAuditEvent({
@@ -625,16 +642,21 @@ export async function saveMediaAssetAsNew(
   }
 
   const sourceBuffer = await getObject(source.r2Key);
-  const processed =
-    parsed.operations.length > 0
-      ? await applyTransforms(sourceBuffer, parsed.operations, source.mimeType)
-      : {
-          buffer: sourceBuffer,
-          mimeType: source.mimeType,
-          width: source.width ?? 0,
-          height: source.height ?? 0,
-          size: sourceBuffer.length,
-        };
+  let processed: Awaited<ReturnType<typeof applyTransforms>>;
+  try {
+    processed =
+      parsed.operations.length > 0
+        ? await applyTransforms(sourceBuffer, parsed.operations, source.mimeType)
+        : {
+            buffer: sourceBuffer,
+            mimeType: source.mimeType,
+            width: source.width ?? 0,
+            height: source.height ?? 0,
+            size: sourceBuffer.length,
+          };
+  } catch (error) {
+    throwMediaError(error);
+  }
 
   const metadata = {
     ...source.metadata,
@@ -678,10 +700,7 @@ export async function saveMediaAssetAsNew(
     await asset.save();
   } catch (error) {
     await MediaAsset.deleteOne({ _id: asset._id });
-    if (error instanceof MediaNotConfiguredError) {
-      throw new AuthError(error.message, 503);
-    }
-    throw error;
+    throwMediaError(error);
   }
 
   await logAuditEvent({

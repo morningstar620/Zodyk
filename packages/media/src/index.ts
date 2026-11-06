@@ -16,6 +16,16 @@ export { getPublicUrl } from './urls';
 export { uploadToR2, deleteFromR2, moveInR2, buildStorageKey } from './upload';
 export type { UploadMediaInput, UploadMediaResult } from './upload';
 export {
+  ALLOWED_UPLOAD_MIME_TYPES,
+  MAX_INPUT_PIXELS,
+  SHARP_INPUT_OPTIONS,
+  MediaValidationError,
+  assertImageWithinPixelLimit,
+  detectUploadMimeType,
+  validateMediaUpload,
+} from './upload-policy';
+export type { ValidateMediaUploadInput } from './upload-policy';
+export {
   applyTransforms,
   generateVariants,
   isImageMime,
