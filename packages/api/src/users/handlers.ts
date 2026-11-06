@@ -1,4 +1,5 @@
 import {
+  escapeRegex,
   createUserSchema,
   DEFAULT_TENANT_ID,
   paginationSchema,
@@ -60,8 +61,8 @@ export async function listUsers(
   };
   if (search) {
     filter.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
+      { name: { $regex: escapeRegex(search), $options: 'i' } },
+      { email: { $regex: escapeRegex(search), $options: 'i' } },
     ];
   }
 

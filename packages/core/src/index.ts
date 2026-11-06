@@ -11,6 +11,7 @@ export const tenantContextSchema = z.object({
 export type TenantContext = z.infer<typeof tenantContextSchema>;
 
 export * from './permissions';
+export * from './regex';
 export * from './schemas/auth';
 export * from './schemas/user';
 export * from './schemas/payments';
