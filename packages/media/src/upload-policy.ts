@@ -25,7 +25,7 @@ export const ALLOWED_UPLOAD_MIME_TYPES = [
 const ALLOWED = new Set<string>(ALLOWED_UPLOAD_MIME_TYPES);
 
 /** Upper bound for decoded image pixels. A small compressed file can decode much larger. */
-export const MAX_INPUT_PIXELS = 100_000_000;
+export const MAX_INPUT_PIXELS = 50_000_000;
 
 /** Options applied to every sharp decode so crafted images cannot exhaust memory. */
 export const SHARP_INPUT_OPTIONS = {
@@ -34,7 +34,12 @@ export const SHARP_INPUT_OPTIONS = {
 };
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const DANGEROUS_EXTENSION = /\.(?:svgz?|xhtml?|html?|xml)$/i;
+const DANGEROUS_EXTENSION = /\.(?:svgz?|xhtml?|html?|xht|shtml|xml|xsl|xslt)$/i;
+const MIME_ALIASES: Record<string, string> = {
+  'image/jpg': 'image/jpeg',
+  'image/pjpeg': 'image/jpeg',
+  'image/x-png': 'image/png',
+};
 
 function ascii(buffer: Buffer, start: number, end: number): string {
   return buffer.toString('ascii', start, end);
@@ -103,7 +108,8 @@ export function validateMediaUpload(input: ValidateMediaUploadInput): { mimeType
     throw new MediaValidationError(`Unsupported file type: ${detected}`);
   }
 
-  const declared = (input.declaredMimeType ?? '').split(';')[0]?.trim().toLowerCase();
+  const rawDeclared = (input.declaredMimeType ?? '').split(';')[0]?.trim().toLowerCase();
+  const declared = rawDeclared ? (MIME_ALIASES[rawDeclared] ?? rawDeclared) : '';
   if (declared && declared !== 'application/octet-stream' && declared !== detected) {
     throw new MediaValidationError('File content does not match the declared type');
   }

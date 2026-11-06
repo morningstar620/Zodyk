@@ -58,6 +58,16 @@ describe('validateMediaUpload', () => {
     ).toEqual({ mimeType: 'image/png' });
   });
 
+  it.each([
+    { declared: 'image/jpg', expected: 'image/jpeg', buffer: jpeg },
+    { declared: 'image/pjpeg', expected: 'image/jpeg', buffer: jpeg },
+    { declared: 'image/x-png', expected: 'image/png', buffer: png },
+  ])('normalizes the $declared alias', ({ declared, expected, buffer }) => {
+    expect(
+      validateMediaUpload({ buffer, filename: 'image', declaredMimeType: declared }),
+    ).toEqual({ mimeType: expected });
+  });
+
   it('rejects an SVG even when it is honestly declared', () => {
     expect(() =>
       validateMediaUpload({ buffer: svg, filename: 'logo.svg', declaredMimeType: 'image/svg+xml' }),
@@ -76,11 +86,14 @@ describe('validateMediaUpload', () => {
     ).toThrow(MediaValidationError);
   });
 
-  it('rejects a dangerous extension even when the bytes are a PNG', () => {
-    expect(() =>
-      validateMediaUpload({ buffer: png, filename: 'logo.svg', declaredMimeType: 'image/png' }),
-    ).toThrow(MediaValidationError);
-  });
+  it.each(['logo.svg', 'logo.xht', 'logo.shtml', 'logo.xslt'])(
+    'rejects the dangerous extension %s even when the bytes are a PNG',
+    (filename) => {
+      expect(() =>
+        validateMediaUpload({ buffer: png, filename, declaredMimeType: 'image/png' }),
+      ).toThrow(MediaValidationError);
+    },
+  );
 
   it('rejects a declared type that conflicts with the bytes', () => {
     expect(() =>
@@ -114,11 +127,11 @@ describe('image pixel limit', () => {
   });
 
   it('accepts dimensions at the limit', () => {
-    expect(() => assertImageWithinPixelLimit(10_000, 10_000)).not.toThrow();
+    expect(() => assertImageWithinPixelLimit(7_000, 7_000)).not.toThrow();
   });
 
   it('rejects dimensions above the limit', () => {
-    expect(() => assertImageWithinPixelLimit(10_001, 10_000)).toThrow(MediaValidationError);
+    expect(() => assertImageWithinPixelLimit(7_072, 7_072)).toThrow(MediaValidationError);
   });
 
   it('rejects an image whose dimensions cannot be read', () => {

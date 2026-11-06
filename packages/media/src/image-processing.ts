@@ -1,4 +1,4 @@
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type { Metadata } from 'sharp';
 import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { IMediaVariant } from '@zodyk/database';
@@ -126,35 +126,40 @@ export async function applyTransforms(
 
   let resultBuffer: Buffer;
   let mimeType = sourceMimeType;
+  let finalMeta: Metadata;
 
-  if (outputFormat) {
-    mimeType = mimeForFormat(outputFormat);
-    switch (outputFormat) {
-      case 'webp':
-        resultBuffer = await pipeline.webp({ quality }).toBuffer();
-        break;
-      case 'avif':
-        resultBuffer = await pipeline.avif({ quality: Math.min(quality, 80) }).toBuffer();
-        break;
-      case 'jpeg':
-        resultBuffer = await pipeline.jpeg({ quality }).toBuffer();
-        break;
-      case 'png':
-        resultBuffer = await pipeline.png().toBuffer();
-        break;
+  try {
+    if (outputFormat) {
+      mimeType = mimeForFormat(outputFormat);
+      switch (outputFormat) {
+        case 'webp':
+          resultBuffer = await pipeline.webp({ quality }).toBuffer();
+          break;
+        case 'avif':
+          resultBuffer = await pipeline.avif({ quality: Math.min(quality, 80) }).toBuffer();
+          break;
+        case 'jpeg':
+          resultBuffer = await pipeline.jpeg({ quality }).toBuffer();
+          break;
+        case 'png':
+          resultBuffer = await pipeline.png().toBuffer();
+          break;
+      }
+    } else if (sourceMimeType === 'image/png') {
+      resultBuffer = await pipeline.png().toBuffer();
+    } else if (sourceMimeType === 'image/webp') {
+      resultBuffer = await pipeline.webp({ quality }).toBuffer();
+    } else if (sourceMimeType === 'image/avif') {
+      resultBuffer = await pipeline.avif({ quality: Math.min(quality, 80) }).toBuffer();
+    } else {
+      resultBuffer = await pipeline.jpeg({ quality }).toBuffer();
+      mimeType = 'image/jpeg';
     }
-  } else if (sourceMimeType === 'image/png') {
-    resultBuffer = await pipeline.png().toBuffer();
-  } else if (sourceMimeType === 'image/webp') {
-    resultBuffer = await pipeline.webp({ quality }).toBuffer();
-  } else if (sourceMimeType === 'image/avif') {
-    resultBuffer = await pipeline.avif({ quality: Math.min(quality, 80) }).toBuffer();
-  } else {
-    resultBuffer = await pipeline.jpeg({ quality }).toBuffer();
-    mimeType = 'image/jpeg';
-  }
 
-  const finalMeta = await sharp(resultBuffer, SHARP_INPUT_OPTIONS).metadata();
+    finalMeta = await sharp(resultBuffer, SHARP_INPUT_OPTIONS).metadata();
+  } catch {
+    throw new MediaValidationError('Invalid or unsupported image');
+  }
 
   return {
     buffer: resultBuffer,
@@ -191,12 +196,18 @@ export async function generateVariants(input: GenerateVariantsInput): Promise<IM
   const resizeWidth = Math.min(width, MAX_IMAGE_WIDTH);
   const resized = image.resize({ width: resizeWidth, withoutEnlargement: true });
 
-  const [webpBuffer, avifBuffer, webpMeta, avifMeta] = await Promise.all([
-    resized.clone().webp({ quality: 82 }).toBuffer(),
-    resized.clone().avif({ quality: 65 }).toBuffer(),
-    resized.clone().webp({ quality: 82 }).toBuffer({ resolveWithObject: true }),
-    resized.clone().avif({ quality: 65 }).toBuffer({ resolveWithObject: true }),
-  ]);
+  const [webpBuffer, avifBuffer, webpMeta, avifMeta] = await (async () => {
+    try {
+      return await Promise.all([
+        resized.clone().webp({ quality: 82 }).toBuffer(),
+        resized.clone().avif({ quality: 65 }).toBuffer(),
+        resized.clone().webp({ quality: 82 }).toBuffer({ resolveWithObject: true }),
+        resized.clone().avif({ quality: 65 }).toBuffer({ resolveWithObject: true }),
+      ]);
+    } catch {
+      throw new MediaValidationError('Invalid or unsupported image');
+    }
+  })();
 
   const baseName = input.filename.replace(/\.[^.]+$/, '');
   const webpFilename = `${baseName}.webp`;
@@ -204,24 +215,37 @@ export async function generateVariants(input: GenerateVariantsInput): Promise<IM
   const webpKey = buildMediaObjectKey(tenantId, folder, input.assetId, webpFilename);
   const avifKey = buildMediaObjectKey(tenantId, folder, input.assetId, avifFilename);
 
-  await Promise.all([
-    client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: webpKey,
-        Body: webpBuffer,
-        ContentType: 'image/webp',
-      }),
-    ),
-    client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: avifKey,
-        Body: avifBuffer,
-        ContentType: 'image/avif',
-      }),
-    ),
-  ]);
+  try {
+    await Promise.all([
+      client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: webpKey,
+          Body: webpBuffer,
+          ContentType: 'image/webp',
+        }),
+      ),
+      client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: avifKey,
+          Body: avifBuffer,
+          ContentType: 'image/avif',
+        }),
+      ),
+    ]);
+  } catch (error) {
+    // A parallel write may have succeeded; remove both keys before rethrowing.
+    await Promise.all([
+      client
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: webpKey }))
+        .catch(() => undefined),
+      client
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: avifKey }))
+        .catch(() => undefined),
+    ]);
+    throw error;
+  }
 
   return [
     {

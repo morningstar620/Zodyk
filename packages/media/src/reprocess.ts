@@ -55,13 +55,19 @@ export async function reprocessMediaAsset(input: ReprocessMediaInput): Promise<R
     }),
   );
 
-  const variants = await generateVariants({
-    buffer: processed.buffer,
-    filename: newFilename,
-    tenantId,
-    folder: input.folder,
-    assetId: input.assetId,
-  });
+  let variants: IMediaVariant[];
+  try {
+    variants = await generateVariants({
+      buffer: processed.buffer,
+      filename: newFilename,
+      tenantId,
+      folder: input.folder,
+      assetId: input.assetId,
+    });
+  } catch (error) {
+    await deleteFromR2(newR2Key).catch(() => undefined);
+    throw error;
+  }
 
   const keysToDelete = [input.r2Key, ...input.variantKeys].filter(
     (key) => key !== newR2Key && !variants.some((v) => v.r2Key === key),
