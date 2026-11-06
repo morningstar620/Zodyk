@@ -1,11 +1,31 @@
+import { EventEmitter } from 'node:events';
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_THEME_ZIP_LIMITS,
   buildThemeZip,
   extractThemeZip,
+  readEntryBytes,
   validateThemePath,
 } from './zip';
+
+function fakeEntry(chunks: Buffer[]): JSZip.JSZipObject {
+  return {
+    nodeStream: () => {
+      const stream = new EventEmitter() as EventEmitter & {
+        pause: () => void;
+        destroy: () => void;
+      };
+      stream.pause = () => undefined;
+      stream.destroy = () => undefined;
+      queueMicrotask(() => {
+        for (const chunk of chunks) stream.emit('data', chunk);
+        stream.emit('end');
+      });
+      return stream;
+    },
+  } as unknown as JSZip.JSZipObject;
+}
 
 const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe, 0x01,
@@ -36,6 +56,29 @@ describe('validateThemePath', () => {
     expect(validateThemePath('/etc/passwd')).toBe(true);
     expect(validateThemePath('__MACOSX/._x')).toBe(false);
     expect(validateThemePath('snippets/.hidden.liquid')).toBe(false);
+  });
+});
+
+describe('readEntryBytes', () => {
+  it('aborts the stream when actual decompressed bytes exceed the per-file limit', async () => {
+    const entry = fakeEntry([Buffer.alloc(64), Buffer.alloc(64)]);
+
+    await expect(
+      readEntryBytes(entry, 'assets/big.bin', { ...DEFAULT_THEME_ZIP_LIMITS, maxFileBytes: 100 }, 0),
+    ).rejects.toThrow(/exceeds/i);
+  });
+
+  it('aborts when the running total exceeds the unpacked limit', async () => {
+    const entry = fakeEntry([Buffer.alloc(64)]);
+
+    await expect(
+      readEntryBytes(
+        entry,
+        'assets/big.bin',
+        { ...DEFAULT_THEME_ZIP_LIMITS, maxUncompressedBytes: 100 },
+        80,
+      ),
+    ).rejects.toThrow(/expands beyond/i);
   });
 });
 

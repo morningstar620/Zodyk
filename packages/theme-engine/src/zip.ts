@@ -140,7 +140,7 @@ export async function extractThemeZip(
  * metadata is attacker-controlled, so the limits are checked against bytes as
  * they are decompressed rather than trusting the central directory alone.
  */
-function readEntryBytes(
+export function readEntryBytes(
   entry: JSZip.JSZipObject,
   path: string,
   limits: ThemeZipLimits,
@@ -158,8 +158,12 @@ function readEntryBytes(
     const fail = (error: Error): void => {
       if (settled) return;
       settled = true;
-      stream.pause?.();
-      stream.destroy?.();
+      try {
+        stream.pause?.();
+        stream.destroy?.();
+      } catch {
+        // The stream may already be closed; the limit error is what matters.
+      }
       reject(error);
     };
 
