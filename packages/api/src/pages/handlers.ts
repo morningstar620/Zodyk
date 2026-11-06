@@ -1,4 +1,5 @@
 import {
+  escapeRegex,
   createPageSchema,
   DEFAULT_TENANT_ID,
   normalizePublication,
@@ -203,8 +204,8 @@ export async function listPages(
   if (status) filter.status = status;
   if (search) {
     filter.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { slug: { $regex: search, $options: 'i' } },
+      { title: { $regex: escapeRegex(search), $options: 'i' } },
+      { slug: { $regex: escapeRegex(search), $options: 'i' } },
     ];
   }
 

@@ -1,4 +1,5 @@
 import {
+  escapeRegex,
   createMenuSchema,
   DEFAULT_TENANT_ID,
   paginationSchema,
@@ -118,8 +119,8 @@ export async function listMenus(
   const filter: Record<string, unknown> = { tenantId: DEFAULT_TENANT_ID };
   if (search) {
     filter.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { handle: { $regex: search, $options: 'i' } },
+      { title: { $regex: escapeRegex(search), $options: 'i' } },
+      { handle: { $regex: escapeRegex(search), $options: 'i' } },
     ];
   }
 
@@ -313,7 +314,7 @@ export async function searchLinkTargets(
       const pages = await Page.find({
         tenantId: DEFAULT_TENANT_ID,
         status: 'published',
-        $or: [{ title: { $regex: q, $options: 'i' } }, { slug: { $regex: q, $options: 'i' } }],
+        $or: [{ title: { $regex: escapeRegex(q), $options: 'i' } }, { slug: { $regex: escapeRegex(q), $options: 'i' } }],
       })
         .limit(20)
         .lean();
@@ -338,8 +339,8 @@ export async function searchLinkTargets(
           status: 'published',
           deletedAt: { $exists: false },
           $or: [
-            { handle: { $regex: q, $options: 'i' } },
-            { 'data.title': { $regex: q, $options: 'i' } },
+            { handle: { $regex: escapeRegex(q), $options: 'i' } },
+            { 'data.title': { $regex: escapeRegex(q), $options: 'i' } },
           ],
         })
           .limit(10)
@@ -370,8 +371,8 @@ export async function searchLinkTargets(
     };
     if (q) {
       filter.$or = [
-        { title: { $regex: q, $options: 'i' } },
-        { slug: { $regex: q, $options: 'i' } },
+        { title: { $regex: escapeRegex(q), $options: 'i' } },
+        { slug: { $regex: escapeRegex(q), $options: 'i' } },
       ];
     }
 
@@ -439,8 +440,8 @@ export async function searchLinkTargets(
     };
     if (q) {
       entryFilter.$or = [
-        { handle: { $regex: q, $options: 'i' } },
-        { 'data.title': { $regex: q, $options: 'i' } },
+        { handle: { $regex: escapeRegex(q), $options: 'i' } },
+        { 'data.title': { $regex: escapeRegex(q), $options: 'i' } },
       ];
     }
 

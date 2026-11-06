@@ -1,4 +1,4 @@
-import type { MetaFieldDefinition } from '@zodyk/core';
+import { escapeRegex, type MetaFieldDefinition } from '@zodyk/core';
 import { getModels } from '../get-models';
 import type {
   EntityDefinitionRecord,
@@ -30,16 +30,16 @@ function buildSearchQuery(search: string, fields: MetaFieldDefinition[]): Record
   const searchableFields = fields.filter((f) => f.searchable && !f.hidden);
   if (searchableFields.length > 0) {
     const orConditions = searchableFields.map((field) => ({
-      [`data.${field.key}`]: { $regex: search, $options: 'i' },
+      [`data.${field.key}`]: { $regex: escapeRegex(search), $options: 'i' },
     }));
     return { $or: orConditions };
   }
 
   return {
     $or: [
-      { 'data.name': { $regex: search, $options: 'i' } },
-      { 'data.title': { $regex: search, $options: 'i' } },
-      { 'data.label': { $regex: search, $options: 'i' } },
+      { 'data.name': { $regex: escapeRegex(search), $options: 'i' } },
+      { 'data.title': { $regex: escapeRegex(search), $options: 'i' } },
+      { 'data.label': { $regex: escapeRegex(search), $options: 'i' } },
     ],
   };
 }
