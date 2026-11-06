@@ -6,11 +6,27 @@ _Open-Source · Self-Hostable · Modern Website Operating System_
 
 Version 1.0 Draft
 
+## Shipped vs planned
+
+This document describes product requirements and an architecture vision; it is not a checklist of features already shipped. The repository currently contains the following:
+
+| Area | Current repository status |
+| --- | --- |
+| Applications and API | Admin and public website Next.js apps plus an Express API mounted at `/api/v1`. There is no GraphQL endpoint, generated OpenAPI specification, or internal `@zodyk/sdk`. |
+| Authentication, media, themes, and builder | Implemented in the current applications and packages. Theme files can be installed/exported as ZIPs, and themes have a version string; these do not provide marketplace installation, per-file history, or rollback. |
+| SEO | The `@zodyk/seo` package is present and used by the API and website for SEO helpers such as metadata, sitemap, robots, and redirects. It is not an empty package. |
+| Forms, workflows, and notifications | `@zodyk/forms`, `@zodyk/workflow`, and `@zodyk/notifications` are empty stubs; the product features described below are planned, not shipped. |
+| Tenancy and sites | Tenant fields exist in models, but there is no request middleware resolving tenants from a host or header, multi-site support, or custom-domain mapping. Handlers use the fixed `DEFAULT_TENANT_ID`. |
+| Queues and runtime isolation | BullMQ queues, Redis-backed rate limits, and an isolated Liquid VM are not implemented. Redis in the local Docker setup does not mean these features are wired up. |
+| Deployment and CI | Deployment includes a Vercel config and a Cloudflare CDN worker note; there are no Kubernetes manifests. There is no `.github/` CI configuration for Dependabot or `npm audit`. |
+
+The sections that follow describe the intended product and requirements. In particular, the architecture, security, and release-roadmap sections include planned capabilities and must not be read as claims that those capabilities are currently available.
+
 # **1\. Executive Summary**
 
-Zodyk is an open-source, self-hostable website platform engineered to serve developers, agencies, businesses, and enterprises. It combines the content management depth of WordPress, the theme architecture and visual editing experience of Shopify, and the developer ergonomics of Next.js - without the plugin dependency and legacy constraints that make WordPress difficult to maintain at scale.
+Zodyk is an open-source, self-hostable website platform designed for developers, agencies, businesses, and enterprises. Its product vision combines content management, theme editing, and developer tooling without the plugin dependency and legacy constraints that make WordPress difficult to maintain at scale.
 
-The platform is designed to be a modern website operating system: a single installation that delivers content management, SEO, media, forms, automations, workflows, notifications, and now a fully integrated payments layer - all from core, with no third-party plugins required for these foundational capabilities.
+The long-term vision is a modern website operating system with content management, SEO, media, forms, automations, workflows, notifications, and payments. See “Shipped vs planned” above for the current implementation status.
 
 # **2\. Mission & Core Principles**
 
@@ -22,21 +38,21 @@ Provide a modern website operating system that delivers simplicity for content e
 
 | **Open Source**        | Fully open-source under a permissive license; community-driven roadmap.           |
 | ---------------------- | --------------------------------------------------------------------------------- |
-| **Self Hostable**      | Runs on Vercel, Docker, Kubernetes, or bare metal with no vendor lock-in.         |
-| **API First**          | Every feature is accessible via REST, GraphQL, and internal SDK.                  |
-| **Theme First**        | Themes are first-class: installable, exportable, versioned, marketplace-ready.    |
+| **Self Hostable**      | Runs on Vercel, Docker, or bare metal; Kubernetes deployment is planned.           |
+| **API First**          | REST API is available at `/api/v1`; GraphQL and an internal SDK are planned.       |
+| **Theme First**        | Themes can be installed and exported; marketplace support is planned.              |
 | **Content Modeling**   | Unlimited custom content types without plugin installation.                       |
 | **Cloud Native**       | Designed for horizontal scaling, edge delivery, and container orchestration.      |
 | **Developer Friendly** | TypeScript throughout, monorepo structure, type-safe APIs, and CLI tooling.       |
 | **No-Code Friendly**   | Visual builder and admin interfaces require zero code for common workflows.       |
-| **Plugin-Light**       | SEO, forms, fields, media, automations, and payments ship in core.                |
+| **Plugin-Light**       | The vision is for SEO, forms, fields, media, automations, and payments in core.    |
 | **Extensible**         | Clean package boundaries and event hooks allow first- and third-party extensions. |
 
 # **3\. Target Users**
 
 | **Persona** | **Primary Needs**                                  | **Key Features Used**                          |
 | ----------- | -------------------------------------------------- | ---------------------------------------------- |
-| Developers  | Type safety, APIs, theme development, modern stack | REST/GraphQL API, SDK, CLI, monorepo packages  |
+| Developers  | Type safety, APIs, theme development, modern stack | REST API, CLI, monorepo packages (GraphQL/SDK planned) |
 | Agencies    | Reusable themes, client websites, visual editing   | Theme engine, visual builder, multi-site       |
 | Businesses  | SEO, media, automations, forms, payments           | SEO platform, workflow engine, payments module |
 | Enterprises | Roles, workflows, audit logs, scalability          | RBAC, audit logs, SSO, multi-tenant support    |
@@ -62,7 +78,7 @@ Provide a modern website operating system that delivers simplicity for content e
 | **ORM**        | Mongoose                                     |
 | **Database**   | MongoDB (primary)                            |
 | **Cache**      | Redis (optional, recommended for production) |
-| **Queue**      | BullMQ                                       |
+| **Queue**      | BullMQ (planned; not currently wired up)     |
 | **Search**     | MongoDB Atlas Search                         |
 
 ## **Storage & Delivery**
@@ -83,7 +99,7 @@ Provide a modern website operating system that delivers simplicity for content e
 
 | **Template Language** | Liquid (Shopify-compatible syntax)                 |
 | --------------------- | -------------------------------------------------- |
-| **Requirements**      | Theme sandboxing, schema system, section rendering |
+| **Requirements**      | Theme sandboxing (planned), schema system, section rendering |
 
 # **5\. Monorepo Structure**
 
@@ -100,23 +116,23 @@ Zodyk is organized as a monorepo to enforce clean package boundaries, enable ind
 - core - Shared types, utilities, and platform primitives
 - auth - Authentication, session management, RBAC
 - database - Mongoose models, migrations, seed scripts
-- seo - SEO metadata, sitemap, robots.txt, schema.org
+- seo - Implemented SEO helpers for metadata, sitemap, robots.txt, redirects, and structured data
 - media - R2 upload, image optimization, media library
-- liquid - Liquid template engine adapter + sandboxing
-- workflow - Workflow automation engine (triggers/conditions/actions)
-- forms - Form builder, submission storage, notifications
-- notifications - Unified email/SMS/WhatsApp/webhook layer
+- liquid - Liquid template engine adapter; isolated VM sandboxing is planned
+- workflow - Planned; currently an empty stub
+- forms - Planned; currently an empty stub
+- notifications - Planned; currently an empty stub
 - payments - Payment gateway adapters, webhook handlers, billing UI
 - builder - Visual drag-and-drop section builder
-- theme-engine - Theme install, export, versioning, marketplace adapter
-- api - REST and GraphQL API layer
+- theme-engine - Theme install, export, and storage
+- api - REST API handlers and routes (`/api/v1`)
 - shared-ui - Design system components shared across apps
 
 **infrastructure/**
 
 - docker - Docker Compose files for local and production
 - scripts - Seed, migration, and deployment utilities
-- deployment - Kubernetes manifests and Vercel config
+- deployment - Vercel config and Cloudflare CDN worker (no Kubernetes manifests)
 
 # **6\. Core Modules**
 
@@ -169,7 +185,7 @@ Equivalent to Advanced Custom Fields (ACF). Available field types:
 
 ## **6.7 SEO Platform**
 
-Built into core - no SEO plugin required.
+Implemented in the repository as `@zodyk/seo`; the broader requirements below describe the intended platform.
 
 - Meta titles and descriptions
 - Open Graph and Twitter Card tags
@@ -181,6 +197,8 @@ Built into core - no SEO plugin required.
 - Breadcrumb schema
 
 ## **6.8 Forms Builder**
+
+**Status: Planned.** The `@zodyk/forms` package is currently an empty stub; these capabilities are not shipped.
 
 - Visual drag-and-drop form builder
 - Submission storage and export
@@ -200,17 +218,14 @@ Inspired by Shopify's theme architecture. Theme structure:
 
 Theme capabilities:
 
-- Install from file or marketplace URL
+- Install from file (implemented); marketplace installation is planned
 - Export as versioned .zip package
-- Version history and rollback
-- Marketplace-ready packaging format
+- Per-file version history and rollback are planned
+- Marketplace-ready packaging format is a future goal
 
 ## **6.10 Theme Editor**
 
-- Shopify-style code editor in the admin panel
-- Syntax highlighting for Liquid, CSS, and JavaScript
-- Live preview with hot reload
-- Version history per file
+The admin includes a theme code editor with syntax highlighting and preview. Per-file version history is planned.
 
 ## **6.11 Visual Builder (Version 2.0)**
 
@@ -221,6 +236,8 @@ Theme capabilities:
 - Schema-driven section settings panel
 
 ## **6.12 Workflow Automation Engine**
+
+**Status: Planned.** The `@zodyk/workflow` package is currently an empty stub; the workflow features below are not shipped.
 
 Inspired by Shopify Flow. Core components: Trigger → Conditions → Actions.
 
@@ -242,6 +259,8 @@ Inspired by Shopify Flow. Core components: Trigger → Conditions → Actions.
 - Grant or revoke access to gated content
 
 ## **6.13 Notifications Platform**
+
+**Status: Planned.** The `@zodyk/notifications` package is currently an empty stub; the providers and delivery features below are not shipped.
 
 ### **Email**
 
@@ -464,7 +483,9 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 - Test mode / live mode toggle prevents accidental production charges
 - Rate limiting on checkout endpoint to prevent abuse
 
-# **8\. Scalability Architecture**
+# **8\. Scalability Architecture (Vision)**
+
+This section describes target architecture. Redis-backed rate limiting, BullMQ queues, and host-resolved multi-tenancy/multi-site support are planned and are not currently implemented.
 
 ## **Database**
 
@@ -497,14 +518,16 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 - Cloudflare for static assets and media delivery
 - Edge caching for public pages with cache-tag-based purging on publish
 
-## **Multi-Tenancy & Multi-Site**
+## **Multi-Tenancy & Multi-Site (Planned)**
 
 - Tenant context injected at request middleware level
 - All MongoDB documents scoped by tenantId
 - Separate R2 bucket prefixes per tenant for media isolation
 - Custom domain mapping per tenant/site
 
-# **9\. Security Requirements**
+# **9\. Security Requirements (Target Requirements)**
+
+The table below records security goals; it does not assert that every control is implemented. For current implementation status, see “Shipped vs planned” above.
 
 | **Area**            | **Implementation**                                                     |
 | ------------------- | ---------------------------------------------------------------------- |
@@ -515,17 +538,17 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 | Audit Logs          | All admin actions written to immutable audit_logs collection           |
 | API Key Management  | Scoped, rotatable keys; hashed at rest; last-used tracking             |
 | Secrets Encryption  | Gateway API keys encrypted at rest using AES-256-GCM                   |
-| Theme Sandboxing    | Liquid executed in isolated VM context; no Node.js module access       |
+| Theme Sandboxing    | Planned: Liquid in an isolated VM context with no Node.js module access |
 | Payment Security    | HMAC webhook validation; no card data stored; PCI-DSS scope minimized  |
-| Dependency Scanning | Dependabot + npm audit in CI pipeline                                  |
+| Dependency Scanning | Planned: Dependabot + npm audit in CI pipeline                         |
 
-# **10\. API Strategy**
+# **10\. API Strategy (Vision)**
 
-- REST API for all CRUD operations, available at /api/v1/\*
-- GraphQL API for flexible content queries, available at /api/graphql
-- Internal SDK (@zodyk/sdk) for server-side access within the monorepo
+- REST API is available at `/api/v1/*`.
+- GraphQL API at `/api/graphql` is planned; no GraphQL endpoint currently ships.
+- Internal SDK (`@zodyk/sdk`) is planned; no such package currently exists.
 - API key authentication for external integrations
-- OpenAPI 3.0 spec auto-generated from route definitions
+- OpenAPI 3.0 spec generation is planned.
 - Future: MCP-compatible APIs and AI agent endpoint profiles
 
 # **11\. Installation Experience**
