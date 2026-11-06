@@ -15,4 +15,6 @@ export {
   type ThemeFileMap,
 } from './engine';
 
+export { escapeHtmlAttribute, safeAssetUrl } from './filters';
+
 export type { Liquid } from 'liquidjs';
