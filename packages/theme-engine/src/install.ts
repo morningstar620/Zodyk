@@ -41,7 +41,11 @@ export async function readThemeDirectory(
 }
 
 export function filesToMap(
-  files: Array<{ path: string; content: string }>,
+  files: Array<{ path: string; content: string | Buffer }>,
 ): Record<string, string> {
-  return Object.fromEntries(files.map((f) => [f.path, f.content]));
+  return Object.fromEntries(
+    files
+      .filter((file): file is { path: string; content: string } => typeof file.content === 'string')
+      .map((file) => [file.path, file.content]),
+  );
 }

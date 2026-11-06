@@ -179,11 +179,14 @@ export class LocalFsStorage implements ThemeStorage {
       const entries = await Promise.all(
         files.map(async (file) => ({
           path: file.path,
-          content:
-            (await readLocalThemeFileBuffer(theme, file.path)) ?? Buffer.alloc(0),
+          content: await readLocalThemeFileBuffer(theme, file.path),
         })),
       );
-      return buildThemeZip(entries);
+      return buildThemeZip(
+        entries.filter(
+          (entry): entry is { path: string; content: Buffer } => entry.content !== null,
+        ),
+      );
     }
     const map = await this.loadTheme(theme);
     return buildThemeZip(Object.entries(map).map(([path, content]) => ({ path, content })));

@@ -511,6 +511,12 @@ export async function installThemeFromZip(
     invalidateThemeCache(theme._id.toString(), tenantId);
     return { themeId: theme._id.toString() };
   } catch (error) {
+    // Best-effort cleanup so a failed install does not leave partial objects.
+    try {
+      await storage.deleteTheme(ref);
+    } catch (cleanupError) {
+      console.error('[theme-engine] failed to clean up theme storage:', cleanupError);
+    }
     await Theme.deleteOne({ _id: theme._id });
     throw error;
   }

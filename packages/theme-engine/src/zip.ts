@@ -73,6 +73,9 @@ export async function extractThemeZip(
     if (!allShareRoot) rootPrefix = '';
   }
 
+  // Early rejection based on the central directory. This is an optimization
+  // only: an attacker can understate the size, so readEntryBytes also enforces
+  // the limits against the actual decompressed bytes.
   let declaredTotal = 0;
   for (const rawName of entries) {
     const declared = declaredUncompressedSize(zip.files[rawName]!);
@@ -109,20 +112,8 @@ export async function extractThemeZip(
     if (!validateThemePath(path)) continue;
 
     const entry = zip.files[rawName]!;
-    const bytes = await entry.async('uint8array');
-    extractedBytes += bytes.byteLength;
-    if (bytes.byteLength > limits.maxFileBytes) {
-      throw new Error(
-        `Theme file exceeds ${formatMegabytes(limits.maxFileBytes)} limit: ${path}`,
-      );
-    }
-    if (extractedBytes > limits.maxUncompressedBytes) {
-      throw new Error(
-        `Theme zip expands beyond ${formatMegabytes(limits.maxUncompressedBytes)} limit`,
-      );
-    }
-
-    const raw = Buffer.from(bytes);
+    const raw = await readEntryBytes(entry, path, limits, extractedBytes);
+    extractedBytes += raw.length;
     files.push({
       path,
       content: isTextThemeFile(path) ? raw.toString('utf8') : raw,
@@ -142,6 +133,63 @@ export async function extractThemeZip(
   }
 
   return files;
+}
+
+/**
+ * Stream an entry into memory while enforcing per-file and total limits. Zip
+ * metadata is attacker-controlled, so the limits are checked against bytes as
+ * they are decompressed rather than trusting the central directory alone.
+ */
+function readEntryBytes(
+  entry: JSZip.JSZipObject,
+  path: string,
+  limits: ThemeZipLimits,
+  alreadyExtracted: number,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const stream = entry.nodeStream('nodebuffer') as NodeJS.ReadableStream & {
+      destroy?: () => void;
+      pause?: () => void;
+    };
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      stream.pause?.();
+      stream.destroy?.();
+      reject(error);
+    };
+
+    stream.on('data', (chunk: Buffer | string) => {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > limits.maxFileBytes) {
+        fail(
+          new Error(`Theme file exceeds ${formatMegabytes(limits.maxFileBytes)} limit: ${path}`),
+        );
+        return;
+      }
+      if (alreadyExtracted + size > limits.maxUncompressedBytes) {
+        fail(
+          new Error(
+            `Theme zip expands beyond ${formatMegabytes(limits.maxUncompressedBytes)} limit`,
+          ),
+        );
+        return;
+      }
+      chunks.push(buffer);
+    });
+    stream.on('error', (error: Error) => fail(error));
+    stream.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
+    });
+  });
 }
 
 export async function buildThemeZip(
