@@ -1,10 +1,16 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import type { Metadata } from 'sharp';
 import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { IMediaVariant } from '@zodyk/database';
 import type { TransformOp } from '@zodyk/core';
 import { buildMediaObjectKey } from './objects';
 import { getR2Client } from './client';
 import { loadSharp } from './load-sharp';
+import {
+  MediaValidationError,
+  SHARP_INPUT_OPTIONS,
+  assertImageWithinPixelLimit,
+} from './upload-policy';
 
 export const MAX_IMAGE_WIDTH = 2560;
 export const MAX_DIMENSION = 8192;
@@ -62,7 +68,7 @@ export async function applyTransforms(
   }
 
   const sharp = await loadSharp();
-  let pipeline = sharp(buffer).rotate();
+  let pipeline = sharp(buffer, SHARP_INPUT_OPTIONS).rotate();
 
   let outputFormat: 'webp' | 'avif' | 'jpeg' | 'png' | null = null;
   let quality = 82;
@@ -108,7 +114,13 @@ export async function applyTransforms(
     }
   }
 
-  const meta = await pipeline.metadata();
+  let meta: Metadata;
+  try {
+    meta = await pipeline.metadata();
+  } catch {
+    throw new MediaValidationError('Invalid or oversized image');
+  }
+  assertImageWithinPixelLimit(meta.width, meta.height);
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
 
@@ -142,7 +154,7 @@ export async function applyTransforms(
     mimeType = 'image/jpeg';
   }
 
-  const finalMeta = await sharp(resultBuffer).metadata();
+  const finalMeta = await sharp(resultBuffer, SHARP_INPUT_OPTIONS).metadata();
 
   return {
     buffer: resultBuffer,
@@ -167,8 +179,14 @@ export async function generateVariants(input: GenerateVariantsInput): Promise<IM
   const folder = input.folder ?? '/';
   const { client, bucket } = await getR2Client();
 
-  const image = sharp(input.buffer).rotate();
-  const metadata = await image.metadata();
+  const image = sharp(input.buffer, SHARP_INPUT_OPTIONS).rotate();
+  let metadata: Metadata;
+  try {
+    metadata = await image.metadata();
+  } catch {
+    throw new MediaValidationError('Invalid or oversized image');
+  }
+  assertImageWithinPixelLimit(metadata.width, metadata.height);
   const width = metadata.width ?? MAX_IMAGE_WIDTH;
   const resizeWidth = Math.min(width, MAX_IMAGE_WIDTH);
   const resized = image.resize({ width: resizeWidth, withoutEnlargement: true });

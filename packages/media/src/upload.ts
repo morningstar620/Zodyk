@@ -1,10 +1,17 @@
 import { CopyObjectCommand, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import type { Metadata } from 'sharp';
 import { DEFAULT_TENANT_ID } from '@zodyk/core';
 import type { IMediaVariant } from '@zodyk/database';
 import { buildMediaObjectKey } from './objects';
 import { getR2Client } from './client';
 import { loadSharp } from './load-sharp';
 import { generateVariants, isImageMime } from './image-processing';
+import {
+  MediaValidationError,
+  SHARP_INPUT_OPTIONS,
+  assertImageWithinPixelLimit,
+  validateMediaUpload,
+} from './upload-policy';
 
 export interface UploadMediaInput {
   buffer: Buffer;
@@ -38,38 +45,60 @@ function buildKey(
 }
 
 export async function uploadToR2(input: UploadMediaInput): Promise<UploadMediaResult> {
+  const { mimeType } = validateMediaUpload({
+    buffer: input.buffer,
+    filename: input.originalFilename,
+    declaredMimeType: input.mimeType,
+  });
+
   const { client, bucket } = await getR2Client();
   const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
   const folder = input.folder ?? '/';
   const filename = sanitizeFilename(input.originalFilename);
   const r2Key = buildKey(tenantId, folder, input.assetId, filename);
 
+  let variants: IMediaVariant[] = [];
+  let width: number | undefined;
+  let height: number | undefined;
+
+  if (isImageMime(mimeType)) {
+    const sharp = await loadSharp();
+    let metadata: Metadata;
+    try {
+      metadata = await sharp(input.buffer, SHARP_INPUT_OPTIONS).rotate().metadata();
+    } catch {
+      throw new MediaValidationError('Invalid or oversized image');
+    }
+    assertImageWithinPixelLimit(metadata.width, metadata.height);
+    width = metadata.width;
+    height = metadata.height;
+  }
+
   await client.send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: r2Key,
       Body: input.buffer,
-      ContentType: input.mimeType,
+      ContentType: mimeType,
     }),
   );
 
-  let variants: IMediaVariant[] = [];
-  let width: number | undefined;
-  let height: number | undefined;
-
-  if (isImageMime(input.mimeType)) {
-    const sharp = await loadSharp();
-    const metadata = await sharp(input.buffer).rotate().metadata();
-    width = metadata.width;
-    height = metadata.height;
-
-    variants = await generateVariants({
-      buffer: input.buffer,
-      filename,
-      tenantId,
-      folder,
-      assetId: input.assetId,
-    });
+  if (isImageMime(mimeType)) {
+    try {
+      variants = await generateVariants({
+        buffer: input.buffer,
+        filename,
+        tenantId,
+        folder,
+        assetId: input.assetId,
+      });
+    } catch (error) {
+      // Do not leave the original object behind when variant generation fails.
+      await client
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: r2Key }))
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   return {
