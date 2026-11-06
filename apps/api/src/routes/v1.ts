@@ -118,6 +118,9 @@ import {
   updateMediaAsset,
   uploadMediaAsset,
 } from '@zodyk/api/media';
+
+import { createAuthRouter } from './auth-routes';
+
 import {
   cancelSubscriptionHandler,
   createPaymentHandler,
@@ -174,6 +177,7 @@ function jsonFromHandler(raw: unknown): Response {
 export function createV1Router(): Router {
   const router = Router();
 
+  router.use(createAuthRouter());
   // —— Users ——
   mount(router, 'get', '/users', async (request) => {
     try {

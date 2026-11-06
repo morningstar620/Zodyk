@@ -20,7 +20,7 @@ export function createApp() {
   }
 
   // Behind Traefik/nginx/cloud LB — needed for correct req.ip / protocol.
-  app.set('trust proxy', 1);
+  app.set('trust proxy', env.trustedProxyHops);
 
   app.use(
     helmet({
