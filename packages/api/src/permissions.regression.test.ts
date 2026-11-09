@@ -331,6 +331,9 @@ describe('meta entry publish permission', () => {
     await expect(
       updateMetaEntry(author, 'article', created.id, { status: 'scheduled' }),
     ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      publishMetaEntry(author, 'article', created.id, {}),
+    ).rejects.toMatchObject({ status: 403 });
 
     const after = await getMetaEntry(editor, 'article', created.id);
     expect(after.status).toBe('draft');

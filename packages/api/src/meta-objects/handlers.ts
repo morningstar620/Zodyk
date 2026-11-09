@@ -4,8 +4,6 @@ import {
   defaultMetaObjectRouting,
   defaultMetaObjectTemplates,
   ensureSeoGroupOnUpdate,
-  paginationSchema,
-  slugToHandle,
   updateMetaObjectSchema,
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';

@@ -1,4 +1,4 @@
-import { createApiTokenSchema, DEFAULT_TENANT_ID, paginationSchema } from '@zodyk/core';
+import { createApiTokenSchema, DEFAULT_TENANT_ID } from '@zodyk/core';
 import {
   AuthError,
   generateApiToken,

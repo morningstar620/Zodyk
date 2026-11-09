@@ -1,4 +1,4 @@
-import type { CrossFileReference, ThemeWorkspaceSnapshot } from '../types';
+import type { ThemeWorkspaceSnapshot } from '../types';
 import { ThemeCatalog } from '../catalog/objects';
 import { ThemeWorkspaceIndex } from './cross-file-index';
 import { resolveLanguageId } from './file-context';

@@ -36,7 +36,6 @@ function hasFile(files: Set<string>, path: string): boolean {
 export function auditThemeHealth(input: ThemeHealthInput): ThemeHealthIssue[] {
   const issues: ThemeHealthIssue[] = [];
   const files = new Set(input.themeFiles);
-  const sectionTypes = new Set(input.sectionTypes);
   const metaByTemplateKey = new Map(
     input.metaObjects.map((m) => [m.templateKey, m] as const),
   );
