@@ -1,10 +1,38 @@
 import { Liquid } from 'liquidjs';
 import type { BlockInstance, SectionInstance } from '@zodyk/core';
-import { scopeCustomCss, sectionWrapperId } from './css';
+import { sanitizeCustomCss, scopeCustomCss, sectionWrapperId } from './css';
 import { resolveDynamicSettings } from './filters';
 import { createThemeFileMap, registerThemeTags, type ThemeFileMap } from './loader';
 import { registerZodykFilters } from './filters';
 import { parseSectionSchema, splitSectionLiquid } from './schema';
+
+/**
+ * A string that `outputEscape` must not escape. Used for values that are
+ * intentionally HTML (rendered page content, tag output, sanitised CSS).
+ */
+export class SafeString {
+  constructor(readonly value: string) {}
+  toString(): string {
+    return this.value;
+  }
+}
+
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+/** HTML-escape Liquid output unless it is explicitly marked safe. */
+export function escapeHtmlOutput(value: unknown): string {
+  if (value instanceof SafeString) return value.value;
+  return String(value).replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
+}
+
+/** Filters that intentionally return HTML and must bypass output escaping. */
+const HTML_RETURNING_FILTERS = ['stylesheet_tag', 'script_tag', 'zodyk_block_attributes'];
 
 export interface LiquidEngineOptions {
   files: Record<string, string>;
@@ -43,12 +71,27 @@ export function createLiquidEngine(options: LiquidEngineOptions): {
     memoryLimit: 1e7,
     templates,
     dynamicPartials: true,
+    outputEscape: escapeHtmlOutput,
   });
 
   registerThemeTags(engine);
   registerZodykFilters(engine, options.locales ?? {});
+  markHtmlReturningFiltersRaw(engine);
 
   return { engine, fileMap };
+}
+
+/**
+ * Re-register filters that intentionally return HTML with `raw` so the global
+ * `outputEscape` does not turn their markup into visible text.
+ */
+function markHtmlReturningFiltersRaw(engine: Liquid): void {
+  for (const name of HTML_RETURNING_FILTERS) {
+    const impl = engine.filters[name];
+    if (!impl) continue;
+    const handler = typeof impl === 'function' ? impl : impl.handler;
+    engine.registerFilter(name, { raw: true, handler });
+  }
 }
 
 function orderedBlocks(instance: SectionInstance): Array<BlockInstance & { id: string }> {
@@ -126,14 +169,30 @@ export async function renderLayout(
 
   const providedHeader = context.content_for_header;
   const contentForHeader = typeof providedHeader === 'string' ? providedHeader : '';
+  const settings = sanitizeSettingsCss(context.settings);
 
   const fullContext = {
     ...context,
-    content_for_layout: `<div id="zodyk-page" data-zodyk-page>${contentForLayout}</div>`,
-    content_for_header: contentForHeader,
+    ...(settings ? { settings } : {}),
+    content_for_layout: new SafeString(
+      `<div id="zodyk-page" data-zodyk-page>${contentForLayout}</div>`,
+    ),
+    content_for_header: new SafeString(contentForHeader),
   };
 
   return engine.parseAndRender(layoutContent, fullContext);
+}
+
+/**
+ * Sanitise theme-level custom CSS before it reaches a `<style>` block. The
+ * sanitized value is marked safe so `outputEscape` does not entity-encode it.
+ */
+function sanitizeSettingsCss(settings: unknown): Record<string, unknown> | undefined {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return undefined;
+  const record = settings as Record<string, unknown>;
+  const css = record.custom_css;
+  if (typeof css !== 'string' || css === '') return record;
+  return { ...record, custom_css: new SafeString(sanitizeCustomCss(css)) };
 }
 
 export { parseSectionSchema, splitSectionLiquid };

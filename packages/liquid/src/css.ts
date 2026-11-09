@@ -6,10 +6,20 @@ const DANGEROUS_PATTERNS = [
   /behavior\s*:/gi,
 ];
 
+/** Guard against a pattern that never stops matching. */
+const MAX_SANITIZE_PASSES = 16;
+
 export function sanitizeCustomCss(css: string): string {
   let sanitized = css;
-  for (const pattern of DANGEROUS_PATTERNS) {
-    sanitized = sanitized.replace(pattern, '');
+  for (let pass = 0; pass < MAX_SANITIZE_PASSES; pass++) {
+    let next = sanitized;
+    for (const pattern of DANGEROUS_PATTERNS) {
+      next = next.replace(pattern, '');
+    }
+    // A single replace can reconstruct a blocked sequence (for example
+    // `</sty</stylele>` becomes `</style>`), so keep going until stable.
+    if (next === sanitized) break;
+    sanitized = next;
   }
   return sanitized.trim();
 }
