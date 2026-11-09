@@ -1,58 +1,64 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@zodyk/shared-ui';
-import { FileText, Image, Settings, User } from 'lucide-react';
+'use client';
 
-const activities = [
-  {
-    user: 'Sara K.',
-    action: 'published Pricing page',
-    icon: FileText,
-    time: '12m ago',
-  },
-  {
-    user: 'Alex M.',
-    action: 'uploaded 4 images to Media Library',
-    icon: Image,
-    time: '1h ago',
-  },
-  {
-    user: 'Jordan P.',
-    action: 'updated site settings',
-    icon: Settings,
-    time: '3h ago',
-  },
-  {
-    user: 'Taylor R.',
-    action: 'invited a new team member',
-    icon: User,
-    time: 'Yesterday',
-  },
-] as const;
+import { Card, CardContent, CardHeader, CardTitle } from '@zodyk/shared-ui';
+import Link from 'next/link';
+import { useApi } from '@/hooks/use-api';
+import { formatAuditAction, formatRelativeTime } from '@/lib/audit-log-format';
+
+type AuditLogRow = {
+  id: string;
+  action: string;
+  resource: string;
+  resourceId?: string;
+  createdAt: string;
+  actor: { name?: string; email?: string } | null;
+};
+
+type AuditLogsResponse = {
+  data: AuditLogRow[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+};
 
 export function RecentActivityCard() {
+  const { data, error, isLoading } = useApi<AuditLogsResponse>('/api/v1/audit-logs?limit=5');
+  const activities = data?.data ?? [];
+
   return (
     <Card>
-      <CardHeader className="pb-4">
+      <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle>Recent activity</CardTitle>
+        <Link href="/audit-logs" className="text-sm font-medium text-primary hover:underline">
+          View all
+        </Link>
       </CardHeader>
       <CardContent>
-        <ul className="divide-y divide-border">
-          {activities.map((item) => {
-            const Icon = item.icon;
-            return (
-              <li key={item.action} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                </div>
+        {isLoading && <p className="text-sm text-muted-foreground">Loading activity...</p>}
+        {!isLoading && error && (
+          <p className="text-sm text-muted-foreground">
+            Recent activity is unavailable: {error.message}
+          </p>
+        )}
+        {!isLoading && !error && activities.length === 0 && (
+          <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+        )}
+        {!isLoading && !error && activities.length > 0 && (
+          <ul className="divide-y divide-border">
+            {activities.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-foreground">
-                    <span className="font-medium">{item.user}</span> {item.action}
+                  <p className="truncate text-sm text-foreground">
+                    <span className="font-medium">{item.actor?.name ?? 'System'}</span>{' '}
+                    {formatAuditAction(item.action)}
+                    {item.resource ? ` · ${item.resource}` : ''}
                   </p>
                 </div>
-                <span className="shrink-0 text-xs text-muted-foreground">{item.time}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {formatRelativeTime(item.createdAt)}
+                </span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   );

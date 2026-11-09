@@ -1,10 +1,11 @@
 'use client';
 
 import { cn } from '@zodyk/shared-ui';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { useApi } from '@/hooks/use-api';
 import { prefetchApi } from '@/lib/api-fetcher';
 import { favoriteItems, navGroups, type NavItem } from './nav-config';
 
@@ -134,11 +135,22 @@ export function SidebarNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
+  const activeTheme = useApi<{ name: string } | null>('/api/v1/themes/active');
+
+  const favorites: NavItem[] = [
+    ...favoriteItems.filter((item) => item.href !== '/themes'),
+    {
+      href: '/themes',
+      label: activeTheme.data?.name ? `Theme: ${activeTheme.data.name}` : 'Themes',
+      icon: Box,
+      prefetch: '/api/v1/themes',
+    },
+  ];
 
   return (
     <nav className="py-2">
       <NavSection label="Favorites">
-        {favoriteItems.map((item) => {
+        {favorites.map((item) => {
           const active =
             item.href === '/'
               ? pathname === '/'
