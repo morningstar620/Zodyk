@@ -19,5 +19,6 @@ export {
   registerUser,
   requestPasswordReset,
   resetPassword,
+  changePassword,
   completeMfaLogin,
 } from './auth-helpers';
