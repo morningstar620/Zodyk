@@ -1,7 +1,6 @@
 import {
   createRoleSchema,
   DEFAULT_TENANT_ID,
-  paginationSchema,
   updateRoleSchema,
 } from '@zodyk/core';
 import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';

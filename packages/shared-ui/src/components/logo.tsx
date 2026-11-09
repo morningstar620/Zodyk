@@ -10,7 +10,6 @@ type LogoProps = {
 export function Logo({ className, width = 32, height = 32, alt = 'Zodyk' }: LogoProps) {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-light.svg"
         alt={alt}
@@ -18,7 +17,6 @@ export function Logo({ className, width = 32, height = 32, alt = 'Zodyk' }: Logo
         height={height}
         className={cn('block dark:hidden', className)}
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-dark.svg"
         alt={alt}

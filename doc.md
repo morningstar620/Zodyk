@@ -517,7 +517,7 @@ All payment gateways communicate status changes via inbound webhooks. The paymen
 | Secrets Encryption  | Gateway API keys encrypted at rest using AES-256-GCM                   |
 | Theme Sandboxing    | Liquid executed in isolated VM context; no Node.js module access       |
 | Payment Security    | HMAC webhook validation; no card data stored; PCI-DSS scope minimized  |
-| Dependency Scanning | Dependabot + npm audit in CI pipeline                                  |
+| Dependency Scanning | CI runs `pnpm audit --audit-level=high`; Dependabot is not configured    |
 
 # **10\. API Strategy**
 

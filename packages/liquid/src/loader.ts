@@ -17,7 +17,7 @@ export function createThemeFileMap(files: Record<string, string>): ThemeFileMap 
 export function registerThemeTags(engine: Liquid): void {
   engine.registerTag('stylesheet_tag', {
     parse(tagToken) {
-      const match = /\s*'([^']+)'|\"([^\"]+)\"/.exec(tagToken.args);
+      const match = /\s*'([^']+)'|"([^"]+)"/.exec(tagToken.args);
       this.asset = match?.[1] ?? match?.[2] ?? '';
     },
     render(ctx, emitter) {
@@ -28,7 +28,7 @@ export function registerThemeTags(engine: Liquid): void {
 
   engine.registerTag('script_tag', {
     parse(tagToken) {
-      const match = /\s*'([^']+)'|\"([^\"]+)\"/.exec(tagToken.args);
+      const match = /\s*'([^']+)'|"([^"]+)"/.exec(tagToken.args);
       this.asset = match?.[1] ?? match?.[2] ?? '';
     },
     render(ctx, emitter) {
