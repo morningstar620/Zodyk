@@ -17,15 +17,56 @@ export interface MenuItemInput {
   items?: MenuItemInput[];
 }
 
+/**
+ * Menu links may only be absolute http(s) URLs, root-relative paths, or in-page
+ * fragments. Anything else (notably `javascript:` and quote/angle-bracket
+ * payloads) is rejected so it cannot become an executable href.
+ */
+const MENU_URL_PATTERN = /^(?:https?:\/\/|#|\/(?!\/))/i;
+const MENU_URL_FORBIDDEN = /[<>"'\\\s]/;
+
+function hasControlCharacter(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function assertSafeMenuUrl(url: string, ctx: z.RefinementCtx): void {
+  const trimmed = url.trim();
+  if (!MENU_URL_PATTERN.test(trimmed)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Menu URL must be an http(s) URL, a root-relative path, or a fragment',
+      path: ['url'],
+    });
+    return;
+  }
+  if (MENU_URL_FORBIDDEN.test(trimmed) || hasControlCharacter(trimmed)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Menu URL contains invalid characters',
+      path: ['url'],
+    });
+  }
+}
+
+const menuUrlSchema = z
+  .string()
+  .min(1)
+  .max(500)
+  .superRefine((url, ctx) => assertSafeMenuUrl(url, ctx));
+
 const baseMenuItemSchema = z.object({
-  id: z.string().optional(),
-  label: z.string().min(1).max(200),
-  url: z.string().min(1).max(500),
-  type: menuItemTypeSchema,
-  resourceId: z.string().optional(),
-  resourceHandle: z.string().optional(),
-  metaType: z.string().optional(),
-});
+    id: z.string().optional(),
+    label: z.string().min(1).max(200),
+    url: menuUrlSchema,
+    type: menuItemTypeSchema,
+    resourceId: z.string().optional(),
+    resourceHandle: z.string().optional(),
+    metaType: z.string().optional(),
+  });
 
 export const menuItemSchema: z.ZodType<MenuItemInput> = z.lazy(() =>
   baseMenuItemSchema.extend({

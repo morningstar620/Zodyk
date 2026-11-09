@@ -10,6 +10,8 @@ export {
   sanitizeCustomCss,
   sectionWrapperId,
   blockWrapperId,
+  SafeString,
+  escapeHtmlOutput,
   type LiquidEngineOptions,
   type RenderSectionOptions,
   type ThemeFileMap,
