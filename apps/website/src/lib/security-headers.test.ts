@@ -30,4 +30,12 @@ describe('storefront security headers', () => {
     assert.equal(header(headers, 'X-Frame-Options'), 'DENY');
     assert.match(header(headers, 'Permissions-Policy'), /camera=\(\)/);
   });
+
+  it('only sends HSTS outside development', () => {
+    assert.match(
+      header(securityHeaders({ isDev: false }), 'Strict-Transport-Security'),
+      /max-age=63072000/,
+    );
+    assert.equal(header(securityHeaders({ isDev: true }), 'Strict-Transport-Security'), '');
+  });
 });

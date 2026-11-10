@@ -36,4 +36,11 @@ describe('securityHeaders', () => {
     expect(header(headers, 'X-Frame-Options')).toBe('DENY');
     expect(header(headers, 'Permissions-Policy')).toContain('camera=()');
   });
+
+  it('only sends HSTS outside development', () => {
+    expect(header(securityHeaders({ isDev: false }), 'Strict-Transport-Security')).toContain(
+      'max-age=63072000',
+    );
+    expect(header(securityHeaders({ isDev: true }), 'Strict-Transport-Security')).toBe('');
+  });
 });
