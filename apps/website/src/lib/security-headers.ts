@@ -19,15 +19,22 @@ export function securityHeaders(options: { isDev?: boolean } = {}): SecurityHead
   ]
     .filter(Boolean)
     .join(' ');
+  // Dev media can come from a local R2/MinIO endpoint over plain HTTP.
+  const assetSrc = ["'self'", 'data:', 'blob:', 'https:', isDev ? 'http:' : undefined]
+    .filter(Boolean)
+    .join(' ');
+  const mediaSrc = ["'self'", 'blob:', 'https:', isDev ? 'http:' : undefined]
+    .filter(Boolean)
+    .join(' ');
 
   const csp = [
     "default-src 'self'",
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
+    `img-src ${assetSrc}`,
     "font-src 'self' data:",
     `connect-src ${connectSrc}`,
-    "media-src 'self' https: blob:",
+    `media-src ${mediaSrc}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

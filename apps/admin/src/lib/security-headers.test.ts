@@ -28,6 +28,16 @@ describe('securityHeaders', () => {
     expect(csp).toContain('ws:');
   });
 
+  it('allows plain-HTTP media in development but not in production', () => {
+    const devCsp = header(securityHeaders({ isDev: true }), 'Content-Security-Policy');
+    const prodCsp = header(securityHeaders({ isDev: false }), 'Content-Security-Policy');
+
+    expect(devCsp).toMatch(/img-src[^;]*http:/);
+    expect(devCsp).toMatch(/media-src[^;]*http:/);
+    expect(prodCsp).not.toMatch(/img-src[^;]*http:/);
+    expect(prodCsp).not.toMatch(/media-src[^;]*http:/);
+  });
+
   it('sets the supporting hardening headers', () => {
     const headers = securityHeaders({ isDev: false });
 

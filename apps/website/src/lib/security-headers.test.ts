@@ -38,4 +38,14 @@ describe('storefront security headers', () => {
     );
     assert.equal(header(securityHeaders({ isDev: true }), 'Strict-Transport-Security'), '');
   });
+
+  it('allows plain-HTTP media in development but not in production', () => {
+    const devCsp = header(securityHeaders({ isDev: true }), 'Content-Security-Policy');
+    const prodCsp = header(securityHeaders({ isDev: false }), 'Content-Security-Policy');
+
+    assert.match(devCsp, /img-src[^;]*http:/);
+    assert.match(devCsp, /media-src[^;]*http:/);
+    assert.doesNotMatch(prodCsp, /img-src[^;]*http:/);
+    assert.doesNotMatch(prodCsp, /media-src[^;]*http:/);
+  });
 });
