@@ -1,6 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
+import { securityHeaders } from './src/lib/security-headers';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
@@ -56,6 +57,10 @@ const nextConfig: NextConfig = {
             value: 'public, s-maxage=60, stale-while-revalidate=600',
           },
         ],
+      },
+      {
+        source: '/(.*)',
+        headers: securityHeaders(),
       },
     ];
   },

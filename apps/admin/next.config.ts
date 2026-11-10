@@ -1,6 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
+import { securityHeaders } from './src/lib/security-headers';
 
 // Load monorepo root .env (Next.js only reads .env from apps/admin by default)
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
@@ -63,6 +64,14 @@ const nextConfig: NextConfig = {
     '@aws-sdk/client-s3',
     '@img/sharp-darwin-arm64',
   ],
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: securityHeaders(),
+      },
+    ];
+  },
   async redirects() {
     return [
       {
