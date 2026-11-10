@@ -10,7 +10,8 @@ import { searchHref } from '@/lib/search';
 import { getBreadcrumbs } from './nav-config';
 import { ThemeToggle } from './theme-toggle';
 
-const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001';
+// The storefront dev server runs on 5003 (apps/website/package.json).
+const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:5003';
 
 function getInitials(name?: string | null) {
   if (!name) return 'U';

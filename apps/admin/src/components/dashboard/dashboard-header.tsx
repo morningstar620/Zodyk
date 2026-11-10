@@ -14,7 +14,8 @@ function getGreeting() {
   return 'Good evening';
 }
 
-const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:3001';
+// The storefront dev server runs on 5003 (apps/website/package.json).
+const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:5003';
 
 export function DashboardHeader({ userName }: DashboardHeaderProps) {
   const firstName = userName?.split(' ')[0] ?? 'there';
