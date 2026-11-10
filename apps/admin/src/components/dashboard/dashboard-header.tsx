@@ -14,6 +14,9 @@ function getGreeting() {
   return 'Good evening';
 }
 
+// The storefront dev server runs on 5003 (apps/website/package.json).
+const WEBSITE_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ?? 'http://localhost:5003';
+
 export function DashboardHeader({ userName }: DashboardHeaderProps) {
   const firstName = userName?.split(' ')[0] ?? 'there';
 
@@ -24,12 +27,12 @@ export function DashboardHeader({ userName }: DashboardHeaderProps) {
           {getGreeting()}, {firstName}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your self-hosted Zodyk instance at acme.studio is up to date and healthy.
+          Manage your content, media, and site settings.
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <a
-          href="/"
+          href={WEBSITE_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted"

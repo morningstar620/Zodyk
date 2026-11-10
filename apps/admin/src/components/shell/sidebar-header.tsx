@@ -3,8 +3,24 @@
 import { Button, Logo } from '@zodyk/shared-ui';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export function SidebarHeader() {
+  const router = useRouter();
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        router.push('/pages/new');
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [router]);
+
   return (
     <div className="space-y-4">
       <Link href="/" className="flex items-center gap-2.5 px-1">
@@ -14,7 +30,12 @@ export function SidebarHeader() {
         </p>
       </Link>
 
-      <Button className="w-full justify-between" size="sm">
+      <Button
+        className="w-full justify-between"
+        size="sm"
+        type="button"
+        onClick={() => router.push('/pages/new')}
+      >
         <span className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Create new
