@@ -17,7 +17,8 @@ export interface ThemeFileMeta {
 
 export interface ThemeFileInput {
   path: string;
-  content: string;
+  /** UTF-8 text for text files, raw bytes for binary assets. */
+  content: string | Buffer;
   contentType?: string;
 }
 
@@ -39,7 +40,9 @@ export interface ThemeStorage {
 
   loadTheme(theme: ThemeRef, files?: ThemeFileMeta[]): Promise<Record<string, string>>;
   readFile(theme: ThemeRef, path: string, meta?: ThemeFileMeta): Promise<string>;
-  writeFile(theme: ThemeRef, path: string, content: string): Promise<WriteResult>;
+  /** Read any theme file, including binary assets, as raw bytes. */
+  readFileBuffer(theme: ThemeRef, path: string, meta?: ThemeFileMeta): Promise<Buffer>;
+  writeFile(theme: ThemeRef, path: string, content: string | Buffer): Promise<WriteResult>;
   deleteFile(theme: ThemeRef, path: string, storageKey: string): Promise<void>;
 
   installTheme(theme: ThemeRef, files: ThemeFileInput[]): Promise<InstallResult>;

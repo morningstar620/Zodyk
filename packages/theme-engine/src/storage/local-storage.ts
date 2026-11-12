@@ -1,6 +1,7 @@
 import { checksum } from '../install';
 import { buildThemeZip, extractThemeZip } from '../zip';
-import { guessContentType } from './content-type';
+import { guessContentType, isTextThemeFile } from './content-type';
+import { listLocalThemeFiles, readLocalThemeFileBuffer } from './local-fallback';
 import {
   assertWithinThemeRoot,
   themePath,
@@ -52,6 +53,7 @@ export class LocalFsStorage implements ThemeStorage {
   }
 
   async loadTheme(theme: ThemeRef, _files?: ThemeFileMeta[]): Promise<Record<string, string>> {
+    void _files;
     const root = this.root(theme);
     await mkdir(root, { recursive: true });
 
@@ -69,6 +71,7 @@ export class LocalFsStorage implements ThemeStorage {
           continue;
         }
         const rel = toPosixRelative(root, fullPath);
+        if (!isTextThemeFile(rel)) continue;
         const st = await stat(fullPath);
         const prev = cache.get(rel);
         if (prev && prev.mtimeMs === st.mtimeMs) {
@@ -95,27 +98,43 @@ export class LocalFsStorage implements ThemeStorage {
   }
 
   async readFile(theme: ThemeRef, path: string, _meta?: ThemeFileMeta): Promise<string> {
+    void _meta;
     const absolute = assertWithinThemeRoot(this.root(theme), themePath(theme, path));
     return readFile(absolute, 'utf8');
   }
 
-  async writeFile(theme: ThemeRef, path: string, content: string): Promise<WriteResult> {
+  async readFileBuffer(
+    theme: ThemeRef,
+    path: string,
+    _meta?: ThemeFileMeta,
+  ): Promise<Buffer> {
+    void _meta;
+    const absolute = assertWithinThemeRoot(this.root(theme), themePath(theme, path));
+    return readFile(absolute);
+  }
+
+  async writeFile(
+    theme: ThemeRef,
+    path: string,
+    content: string | Buffer,
+  ): Promise<WriteResult> {
     const root = this.root(theme);
     await mkdir(root, { recursive: true });
     const absolute = assertWithinThemeRoot(root, themePath(theme, path));
     await mkdir(dirname(absolute), { recursive: true });
-    await writeFile(absolute, content, 'utf8');
+    await writeFile(absolute, content);
     this.invalidateFileCache(theme, path);
     return {
       path,
       storageKey: path,
-      size: Buffer.byteLength(content, 'utf8'),
+      size: typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : content.length,
       checksum: checksum(content),
       contentType: guessContentType(path),
     };
   }
 
   async deleteFile(theme: ThemeRef, path: string, _storageKey: string): Promise<void> {
+    void _storageKey;
     const absolute = assertWithinThemeRoot(this.root(theme), themePath(theme, path));
     await rm(absolute, { force: true });
     this.invalidateFileCache(theme, path);
@@ -126,8 +145,8 @@ export class LocalFsStorage implements ThemeStorage {
     await mkdir(root, { recursive: true });
 
     // Clear existing files under root (except we rewrite from payload)
-    const existing = await this.loadTheme(theme);
-    for (const path of Object.keys(existing)) {
+    const existing = await listLocalThemeFiles(theme);
+    for (const path of existing) {
       if (!files.some((f) => f.path === path)) {
         await this.deleteFile(theme, path, path);
       }
@@ -155,7 +174,20 @@ export class LocalFsStorage implements ThemeStorage {
     this.stopWatch(theme.id);
   }
 
-  async exportTheme(theme: ThemeRef, _files?: ThemeFileMeta[]): Promise<Buffer> {
+  async exportTheme(theme: ThemeRef, files?: ThemeFileMeta[]): Promise<Buffer> {
+    if (files && files.length > 0) {
+      const entries = await Promise.all(
+        files.map(async (file) => ({
+          path: file.path,
+          content: await readLocalThemeFileBuffer(theme, file.path),
+        })),
+      );
+      return buildThemeZip(
+        entries.filter(
+          (entry): entry is { path: string; content: Buffer } => entry.content !== null,
+        ),
+      );
+    }
     const map = await this.loadTheme(theme);
     return buildThemeZip(Object.entries(map).map(([path, content]) => ({ path, content })));
   }

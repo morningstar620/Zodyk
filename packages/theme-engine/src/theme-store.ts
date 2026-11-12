@@ -12,7 +12,11 @@ import type { Types } from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { relative, resolve } from 'node:path';
 import { checksum, readThemeDirectory } from './install';
-import { PROTECTED_THEME_PATHS, guessContentType } from './storage/content-type';
+import {
+  PROTECTED_THEME_PATHS,
+  guessContentType,
+  isTextThemeFile,
+} from './storage/content-type';
 import { getThemeStorage, getThemeStorageKind } from './storage/create-theme-storage';
 import { resolveThemeLocalRoot, themeRoot } from './storage/theme-path';
 import { listLocalThemeFiles } from './storage/local-fallback';
@@ -30,7 +34,12 @@ import {
 } from './renderer';
 import type { RenderContextInput } from './renderer';
 import { renderSection } from '@zodyk/liquid';
-import { buildThemeZipFilename, validateThemePath, type ThemeZipFile } from './zip';
+import {
+  buildThemeZipFilename,
+  extractThemeZip,
+  validateThemePath,
+  type ThemeZipFile,
+} from './zip';
 import { buildThemeObjectKey, buildThemeStoragePrefix, listObjects } from '@zodyk/media/objects';
 
 export interface LoadedTheme {
@@ -343,7 +352,7 @@ export async function getThemeAssetFile(
     previewToken?: string;
     tenantId?: string;
   } = {},
-): Promise<{ content: string; contentType: string } | null> {
+): Promise<{ content: string | Buffer; contentType: string } | null> {
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const path = assetPath.startsWith('assets/') ? assetPath : `assets/${assetPath}`;
   const { Theme } = await ensureDb();
@@ -371,6 +380,10 @@ export async function getThemeAssetFile(
     themeId = theme._id.toString();
   }
 
+  if (!isTextThemeFile(path)) {
+    return getThemeAssetBytes(themeId, path, tenantId);
+  }
+
   const cached = getCachedLoadedTheme(themeId, tenantId);
   if (cached) {
     const content = cached.files[path];
@@ -378,7 +391,37 @@ export async function getThemeAssetFile(
     return { content, contentType: guessContentType(path) };
   }
 
-  return getThemeFile(themeId, path, tenantId);
+  const file = await getThemeFile(themeId, path, tenantId);
+  return file ? { content: file.content, contentType: file.contentType } : null;
+}
+
+async function getThemeAssetBytes(
+  themeId: string,
+  path: string,
+  tenantId: string,
+): Promise<{ content: Buffer; contentType: string } | null> {
+  const { Theme, ThemeFile } = await ensureDb();
+  const theme = await Theme.findOne({ _id: themeId, tenantId }).lean();
+  if (!theme) return null;
+
+  const file = await ThemeFile.findOne({ themeId: theme._id, path }).lean();
+  if (!file && getThemeStorageKind() !== 'local') return null;
+
+  const storage = getThemeStorage();
+  const meta = file
+    ? {
+        path: file.path,
+        storageKey: resolveThemeFileStorageKey(file),
+        content: file.content,
+      }
+    : undefined;
+
+  try {
+    const content = await storage.readFileBuffer(toThemeRef(theme), path, meta);
+    return { content, contentType: file?.contentType ?? guessContentType(path) };
+  } catch {
+    return null;
+  }
 }
 
 export async function installThemeFromDirectory(
@@ -438,6 +481,10 @@ export async function installThemeFromZip(
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const storage = getThemeStorage();
 
+  // Validate and extract before creating a theme row so an invalid or oversized
+  // archive leaves no partial theme behind.
+  const files = await extractThemeZip(buffer);
+
   const theme = await Theme.create({
     name: options.name,
     slug: options.slug,
@@ -451,14 +498,28 @@ export async function installThemeFromZip(
   });
 
   const ref = toThemeRef(theme);
-  const installed = await storage.importTheme(ref, buffer);
-  if (installed.storagePrefix) {
-    theme.storagePrefix = installed.storagePrefix;
-    await theme.save();
+  try {
+    const installed = await storage.installTheme(
+      ref,
+      files.map((f) => ({ path: f.path, content: f.content, contentType: f.contentType })),
+    );
+    if (installed.storagePrefix) {
+      theme.storagePrefix = installed.storagePrefix;
+      await theme.save();
+    }
+    await syncThemeFileRows(theme._id, installed.files);
+    invalidateThemeCache(theme._id.toString(), tenantId);
+    return { themeId: theme._id.toString() };
+  } catch (error) {
+    // Best-effort cleanup so a failed install does not leave partial objects.
+    try {
+      await storage.deleteTheme(ref);
+    } catch (cleanupError) {
+      console.error('[theme-engine] failed to clean up theme storage:', cleanupError);
+    }
+    await Theme.deleteOne({ _id: theme._id });
+    throw error;
   }
-  await syncThemeFileRows(theme._id, installed.files);
-  invalidateThemeCache(theme._id.toString(), tenantId);
-  return { themeId: theme._id.toString() };
 }
 
 export async function exportThemeAsZip(
@@ -470,7 +531,7 @@ export async function exportThemeAsZip(
   if (!theme) throw new Error('Theme not found');
 
   const storage = getThemeStorage();
-  const metas = storage.kind === 'r2' ? await loadFileMetas(theme._id) : undefined;
+  const metas = await loadFileMetas(theme._id);
   const buffer = await storage.exportTheme(toThemeRef(theme), metas);
   return {
     buffer,

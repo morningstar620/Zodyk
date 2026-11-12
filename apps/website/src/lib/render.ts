@@ -329,7 +329,7 @@ export async function getThemeAsset(
   assetPath: string,
   options: RenderSiteOptions = {},
 ): Promise<{
-  content: string;
+  content: string | Buffer;
   contentType: string;
 } | null> {
   let previewThemeId = options.previewThemeId;

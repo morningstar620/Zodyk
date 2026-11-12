@@ -4,6 +4,7 @@ import {
   copyPrefix,
   deleteObject,
   deleteObjects,
+  getObject,
   getObjectAsString,
   listObjects,
   putObject,
@@ -11,8 +12,8 @@ import {
 import { requireStorageConfig } from '@zodyk/media/config';
 import { checksum } from '../install';
 import { buildThemeZip, extractThemeZip } from '../zip';
-import { guessContentType } from './content-type';
-import { readLocalThemeFile } from './local-fallback';
+import { guessContentType, isTextThemeFile } from './content-type';
+import { readLocalThemeFile, readLocalThemeFileBuffer } from './local-fallback';
 import type {
   InstallResult,
   ThemeFileInput,
@@ -64,10 +65,11 @@ export class R2Storage implements ThemeStorage {
   async loadTheme(theme: ThemeRef, files: ThemeFileMeta[] = []): Promise<Record<string, string>> {
     await this.ensureConfigured();
     const entries = await mapConcurrent(files, 10, async (f) => {
+      if (!isTextThemeFile(f.path)) return null;
       const content = await this.readContent(theme, f.path, f.storageKey, f.content);
       return [f.path, content] as const;
     });
-    return Object.fromEntries(entries);
+    return Object.fromEntries(entries.filter((entry) => entry !== null));
   }
 
   async readFile(theme: ThemeRef, path: string, meta?: ThemeFileMeta): Promise<string> {
@@ -86,7 +88,31 @@ export class R2Storage implements ThemeStorage {
     }
   }
 
-  async writeFile(theme: ThemeRef, path: string, content: string): Promise<WriteResult> {
+  async readFileBuffer(
+    theme: ThemeRef,
+    path: string,
+    meta?: ThemeFileMeta,
+  ): Promise<Buffer> {
+    await this.ensureConfigured();
+    if (meta?.content) return Buffer.from(meta.content, 'utf8');
+    const key = resolveR2Key(theme, path, meta?.storageKey ?? path);
+    try {
+      return await getObject(key);
+    } catch (error) {
+      const local = await readLocalThemeFileBuffer(theme, path);
+      if (local !== null) {
+        console.warn(`[theme-engine] R2 miss for ${path}, using local fallback`);
+        return local;
+      }
+      throw error;
+    }
+  }
+
+  async writeFile(
+    theme: ThemeRef,
+    path: string,
+    content: string | Buffer,
+  ): Promise<WriteResult> {
     await this.ensureConfigured();
     const storageKey = buildThemeObjectKey(theme.tenantId, theme.id, path);
     const contentType = guessContentType(path);
@@ -94,7 +120,7 @@ export class R2Storage implements ThemeStorage {
     return {
       path,
       storageKey,
-      size: Buffer.byteLength(content, 'utf8'),
+      size: typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : content.length,
       checksum: checksum(content),
       contentType,
     };
@@ -134,8 +160,11 @@ export class R2Storage implements ThemeStorage {
   }
 
   async exportTheme(theme: ThemeRef, files: ThemeFileMeta[] = []): Promise<Buffer> {
-    const map = await this.loadTheme(theme, files);
-    return buildThemeZip(Object.entries(map).map(([path, content]) => ({ path, content })));
+    const entries = await mapConcurrent(files, 10, async (f) => ({
+      path: f.path,
+      content: await this.readContentBuffer(theme, f.path, f.storageKey, f.content),
+    }));
+    return buildThemeZip(entries);
   }
 
   async importTheme(theme: ThemeRef, zip: Buffer): Promise<InstallResult> {
@@ -147,7 +176,32 @@ export class R2Storage implements ThemeStorage {
   }
 
   watch(_theme: ThemeRef, _onChange: (paths: string[]) => void): () => void {
+    void _theme;
+    void _onChange;
     return () => undefined;
+  }
+
+  private async readContentBuffer(
+    theme: ThemeRef,
+    path: string,
+    storageKey: string,
+    legacyContent?: string,
+  ): Promise<Buffer> {
+    if (legacyContent !== undefined && legacyContent !== '') {
+      return Buffer.from(legacyContent, 'utf8');
+    }
+
+    const key = resolveR2Key(theme, path, storageKey);
+    try {
+      return await getObject(key);
+    } catch (error) {
+      const local = await readLocalThemeFileBuffer(theme, path);
+      if (local !== null) {
+        console.warn(`[theme-engine] R2 miss for ${path}, using local fallback`);
+        return local;
+      }
+      throw error;
+    }
   }
 
   private async readContent(

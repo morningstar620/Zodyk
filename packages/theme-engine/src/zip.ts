@@ -1,13 +1,45 @@
 import JSZip from 'jszip';
+import { guessContentType, isTextThemeFile } from './storage/content-type';
 
-const MAX_ZIP_BYTES = 50 * 1024 * 1024;
+const MEGABYTE = 1024 * 1024;
+
+export interface ThemeZipLimits {
+  /** Compressed archive size limit. */
+  maxZipBytes: number;
+  /** Total uncompressed size limit across every extracted entry. */
+  maxUncompressedBytes: number;
+  /** Uncompressed size limit for a single entry. */
+  maxFileBytes: number;
+  /** Reject archives that expand by more than this factor. */
+  maxCompressionRatio: number;
+}
+
+export const DEFAULT_THEME_ZIP_LIMITS: ThemeZipLimits = {
+  maxZipBytes: 50 * MEGABYTE,
+  maxUncompressedBytes: 100 * MEGABYTE,
+  maxFileBytes: 25 * MEGABYTE,
+  maxCompressionRatio: 1000,
+};
+
+/** Only apply the ratio check once the archive claims a meaningful size. */
+const MIN_RATIO_CHECK_BYTES = MEGABYTE;
 
 const REQUIRED_PATHS = ['layout/theme.liquid', 'config/settings_schema.json'];
 
 export interface ThemeZipFile {
   path: string;
-  content: string;
+  /** UTF-8 text for known text extensions, raw bytes for everything else. */
+  content: string | Buffer;
   contentType: string;
+}
+
+interface ZipEntryData {
+  uncompressedSize?: number;
+}
+
+function declaredUncompressedSize(entry: JSZip.JSZipObject): number | null {
+  const data = (entry as unknown as { _data?: ZipEntryData })._data;
+  return typeof data?.uncompressedSize === 'number' ? data.uncompressedSize : null;
 }
 
 export function validateThemePath(path: string): boolean {
@@ -17,9 +49,12 @@ export function validateThemePath(path: string): boolean {
   return true;
 }
 
-export async function extractThemeZip(buffer: Buffer): Promise<ThemeZipFile[]> {
-  if (buffer.length > MAX_ZIP_BYTES) {
-    throw new Error('Theme zip exceeds 50MB limit');
+export async function extractThemeZip(
+  buffer: Buffer,
+  limits: ThemeZipLimits = DEFAULT_THEME_ZIP_LIMITS,
+): Promise<ThemeZipFile[]> {
+  if (buffer.length > limits.maxZipBytes) {
+    throw new Error(`Theme zip exceeds ${formatMegabytes(limits.maxZipBytes)} limit`);
   }
 
   const zip = await JSZip.loadAsync(buffer);
@@ -38,6 +73,37 @@ export async function extractThemeZip(buffer: Buffer): Promise<ThemeZipFile[]> {
     if (!allShareRoot) rootPrefix = '';
   }
 
+  // Early rejection based on the central directory. This is an optimization
+  // only: an attacker can understate the size, so readEntryBytes also enforces
+  // the limits against the actual decompressed bytes.
+  let declaredTotal = 0;
+  for (const rawName of entries) {
+    const declared = declaredUncompressedSize(zip.files[rawName]!);
+    if (declared === null) continue;
+    if (declared > limits.maxFileBytes) {
+      throw new Error(
+        `Theme file exceeds ${formatMegabytes(limits.maxFileBytes)} limit: ${rawName}`,
+      );
+    }
+    declaredTotal += declared;
+    if (declaredTotal > limits.maxUncompressedBytes) {
+      throw new Error(
+        `Theme zip expands beyond ${formatMegabytes(limits.maxUncompressedBytes)} limit`,
+      );
+    }
+  }
+
+  if (
+    declaredTotal >= MIN_RATIO_CHECK_BYTES &&
+    buffer.length > 0 &&
+    declaredTotal / buffer.length > limits.maxCompressionRatio
+  ) {
+    throw new Error(
+      `Theme zip compression ratio exceeds ${limits.maxCompressionRatio}:1 limit`,
+    );
+  }
+
+  let extractedBytes = 0;
   for (const rawName of entries) {
     const name = rawName.replace(/\\/g, '/');
     let path = rootPrefix && name.startsWith(rootPrefix) ? name.slice(rootPrefix.length) : name;
@@ -46,10 +112,11 @@ export async function extractThemeZip(buffer: Buffer): Promise<ThemeZipFile[]> {
     if (!validateThemePath(path)) continue;
 
     const entry = zip.files[rawName]!;
-    const content = await entry.async('string');
+    const raw = await readEntryBytes(entry, path, limits, extractedBytes);
+    extractedBytes += raw.length;
     files.push({
       path,
-      content,
+      content: isTextThemeFile(path) ? raw.toString('utf8') : raw,
       contentType: guessContentType(path),
     });
   }
@@ -68,8 +135,69 @@ export async function extractThemeZip(buffer: Buffer): Promise<ThemeZipFile[]> {
   return files;
 }
 
+/**
+ * Stream an entry into memory while enforcing per-file and total limits. Zip
+ * metadata is attacker-controlled, so the limits are checked against bytes as
+ * they are decompressed rather than trusting the central directory alone.
+ */
+export function readEntryBytes(
+  entry: JSZip.JSZipObject,
+  path: string,
+  limits: ThemeZipLimits,
+  alreadyExtracted: number,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const stream = entry.nodeStream('nodebuffer') as NodeJS.ReadableStream & {
+      destroy?: () => void;
+      pause?: () => void;
+    };
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        stream.pause?.();
+        stream.destroy?.();
+      } catch {
+        // The stream may already be closed; the limit error is what matters.
+      }
+      reject(error);
+    };
+
+    stream.on('data', (chunk: Buffer | string) => {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > limits.maxFileBytes) {
+        fail(
+          new Error(`Theme file exceeds ${formatMegabytes(limits.maxFileBytes)} limit: ${path}`),
+        );
+        return;
+      }
+      if (alreadyExtracted + size > limits.maxUncompressedBytes) {
+        fail(
+          new Error(
+            `Theme zip expands beyond ${formatMegabytes(limits.maxUncompressedBytes)} limit`,
+          ),
+        );
+        return;
+      }
+      chunks.push(buffer);
+    });
+    stream.on('error', (error: Error) => fail(error));
+    stream.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
+    });
+  });
+}
+
 export async function buildThemeZip(
-  files: Array<{ path: string; content: string }>,
+  files: Array<{ path: string; content: string | Buffer }>,
 ): Promise<Buffer> {
   const zip = new JSZip();
   for (const file of files) {
@@ -78,12 +206,11 @@ export async function buildThemeZip(
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
-function guessContentType(path: string): string {
-  if (path.endsWith('.json')) return 'application/json';
-  if (path.endsWith('.css')) return 'text/css';
-  if (path.endsWith('.js')) return 'application/javascript';
-  if (path.endsWith('.liquid')) return 'text/x-liquid';
-  return 'text/plain';
+function formatMegabytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < MEGABYTE) return `${Math.round(bytes / 1024)}KB`;
+  const megabytes = bytes / MEGABYTE;
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)}MB`;
 }
 
 export function buildThemeZipFilename(themeName: string): string {
