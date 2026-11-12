@@ -1,3 +1,4 @@
+import { themeAssetHeaders } from '@/lib/asset-policy';
 import { getThemeAsset } from '@/lib/render';
 import { NextResponse } from 'next/server';
 
@@ -17,9 +18,11 @@ export async function GET(
   }
   const body = typeof asset.content === 'string' ? asset.content : new Uint8Array(asset.content);
   return new NextResponse(body, {
-    headers: {
-      'Content-Type': asset.contentType,
-      'Cache-Control': 'public, max-age=3600',
-    },
+    headers: themeAssetHeaders(asset.contentType, {
+      // PR #73 will pass the preview-aware value from themeAssetCacheControl.
+      cacheControl: 'public, max-age=3600',
+      dest: request.headers.get('sec-fetch-dest'),
+      filename: assetPath,
+    }),
   });
 }
