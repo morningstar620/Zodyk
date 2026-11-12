@@ -1,10 +1,11 @@
+import { createRoleSchema, DEFAULT_TENANT_ID, updateRoleSchema } from '@zodyk/core';
 import {
-  createRoleSchema,
-  DEFAULT_TENANT_ID,
-  paginationSchema,
-  updateRoleSchema,
-} from '@zodyk/core';
-import { AuthError, logAuditEvent, requirePermission, type AuthSession } from '@zodyk/auth';
+  AuthError,
+  hasPermission,
+  logAuditEvent,
+  requirePermission,
+  type AuthSession,
+} from '@zodyk/auth';
 import { connectDatabase, getModels } from '@zodyk/database';
 
 export async function listRoles(session: AuthSession | null) {
@@ -48,6 +49,9 @@ export async function getRole(session: AuthSession | null, id: string) {
 export async function createRole(session: AuthSession | null, body: unknown, ip?: string) {
   requirePermission(session, 'roles:create');
   const input = createRoleSchema.parse(body);
+  if (input.permissions.some((p) => !hasPermission(session!, p))) {
+    throw new AuthError('Cannot grant permissions outside the token scope', 403);
+  }
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
@@ -92,6 +96,9 @@ export async function updateRole(
 ) {
   requirePermission(session, 'roles:update');
   const input = updateRoleSchema.parse(body);
+  if (input.permissions?.some((p) => !hasPermission(session!, p))) {
+    throw new AuthError('Cannot grant permissions outside the token scope', 403);
+  }
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');

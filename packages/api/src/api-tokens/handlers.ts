@@ -1,4 +1,4 @@
-import { createApiTokenSchema, DEFAULT_TENANT_ID, paginationSchema } from '@zodyk/core';
+import { createApiTokenSchema, DEFAULT_TENANT_ID } from '@zodyk/core';
 import {
   AuthError,
   generateApiToken,
@@ -43,6 +43,9 @@ export async function createApiTokenHandler(
 ) {
   requirePermission(session, 'api_tokens:create');
   const input = createApiTokenSchema.parse(body);
+  if (input.scopes.some((scope) => !hasPermission(session!, scope))) {
+    throw new AuthError('Scope not permitted', 403);
+  }
 
   const token = await generateApiToken(
     session!.userId,
@@ -65,7 +68,7 @@ export async function createApiTokenHandler(
 }
 
 export async function deleteApiToken(session: AuthSession | null, id: string, ip?: string) {
-  requirePermission(session, 'api_tokens:delete');
+  requireAuth(session);
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
   await connectDatabase(uri);

@@ -36,6 +36,7 @@ export default function ApiTokensPage() {
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>([]);
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [newTokenPermissions, setNewTokenPermissions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -75,6 +76,7 @@ export default function ApiTokensPage() {
 
     const data = await res.json();
     setNewToken(data.token);
+    setNewTokenPermissions(data.effectivePermissions);
     setName('');
     setScopes([]);
     loadTokens();
@@ -98,6 +100,10 @@ export default function ApiTokensPage() {
         <Alert variant="success">
           <p className="mb-1 font-medium">Copy your token now — it won&apos;t be shown again:</p>
           <code className="break-all text-xs">{newToken}</code>
+          <p className="mt-2 text-xs">
+            Permissions at creation: {newTokenPermissions.join(', ')}. These can change if your
+            roles change.
+          </p>
         </Alert>
       )}
 
@@ -116,10 +122,7 @@ export default function ApiTokensPage() {
             <div className="grid grid-cols-2 gap-2">
               {ALL_PERMISSIONS.map((perm) => (
                 <label key={perm} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={scopes.includes(perm)}
-                    onChange={() => toggleScope(perm)}
-                  />
+                  <Checkbox checked={scopes.includes(perm)} onChange={() => toggleScope(perm)} />
                   {perm}
                 </label>
               ))}
