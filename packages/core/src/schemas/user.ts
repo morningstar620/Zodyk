@@ -1,5 +1,15 @@
 import { z } from 'zod';
+import { ALL_PERMISSIONS } from '../permissions';
 import { passwordSchema } from './auth';
+
+const knownPermissions = new Set<string>(ALL_PERMISSIONS);
+const knownModules = new Set(ALL_PERMISSIONS.map((permission) => permission.split(':')[0]));
+const rolePermission = z.string().refine((permission) => {
+  if (knownPermissions.has(permission)) return true;
+  const [module, action, extra] = permission.split(':');
+  if (action === '*' && !extra && module && knownModules.has(module)) return true;
+  return /^system_records:[a-z0-9_]+:(create|read|update|delete|export|import)$/.test(permission);
+}, 'Unknown or disallowed permission');
 
 export const userStatusSchema = z.enum(['active', 'suspended', 'pending']);
 
@@ -14,7 +24,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   email: z.string().email().optional(),
-  roleIds: z.array(z.string()).optional(),
+  roleIds: z.array(z.string()).min(1, 'At least one role is required').optional(),
   status: userStatusSchema.optional(),
 });
 
@@ -25,12 +35,12 @@ export const createRoleSchema = z.object({
     .min(1)
     .max(50)
     .regex(/^[a-z][a-z0-9_]*$/, 'Slug must be lowercase alphanumeric with underscores'),
-  permissions: z.array(z.string()).min(1),
+  permissions: z.array(rolePermission).min(1),
 });
 
 export const updateRoleSchema = z.object({
   name: z.string().min(1).max(50).optional(),
-  permissions: z.array(z.string()).optional(),
+  permissions: z.array(rolePermission).optional(),
 });
 
 export const createApiTokenSchema = z.object({

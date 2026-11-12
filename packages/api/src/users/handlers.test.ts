@@ -69,6 +69,42 @@ describe('user role assignment', () => {
     mocks.logAuditEvent.mockClear();
   });
 
+  it('rejects an empty role list before saving a user', async () => {
+    await expect(updateUser(adminSession, 'user-2', { roleIds: [] })).rejects.toThrow(
+      'At least one role is required',
+    );
+    expect(mocks.userFindOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects suspending the current account before saving', async () => {
+    await expect(
+      updateUser(adminSession, 'actor-1', { status: 'suspended' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Cannot suspend your own account',
+    });
+    expect(mocks.userFindOne).not.toHaveBeenCalled();
+  });
+
+  it('still allows suspending a different user', async () => {
+    const save = vi.fn(async () => {});
+    mocks.userFindOne.mockResolvedValue({
+      _id: { toString: () => 'user-2' },
+      email: 'user@example.com',
+      name: 'User',
+      status: 'active',
+      roleIds: ['role-editor'],
+      save,
+    });
+    mocks.roleFind.mockReturnValueOnce(lean([{ slug: 'editor', permissions: ['pages:read'] }]));
+    await expect(
+      updateUser(adminSession, 'user-2', { status: 'suspended' }),
+    ).resolves.toMatchObject({
+      status: 'suspended',
+    });
+    expect(save).toHaveBeenCalledOnce();
+  });
+
   it('rejects a non-super-admin assigning the super admin role', async () => {
     mocks.roleFind
       .mockReturnValueOnce(lean([{ slug: 'super_admin', permissions: ['*'] }]))

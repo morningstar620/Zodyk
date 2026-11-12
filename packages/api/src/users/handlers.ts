@@ -194,6 +194,10 @@ export async function updateUser(
   requirePermission(session, 'users:update');
   const input = updateUserSchema.parse(body);
 
+  if (session?.userId === id && input.status === 'suspended') {
+    throw new AuthError('Cannot suspend your own account', 400);
+  }
+
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI is required');
   await connectDatabase(uri);

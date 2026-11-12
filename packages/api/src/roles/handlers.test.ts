@@ -8,6 +8,7 @@ vi.mock('@zodyk/auth', async () => {
 });
 
 import { createRole, updateRole } from './handlers';
+import { createRoleSchema, updateRoleSchema } from '@zodyk/core';
 
 const tokenSession = {
   userId: 'owner',
@@ -27,9 +28,32 @@ describe('role delegation by API tokens', () => {
   });
 
   it('rejects adding permissions outside the token scope to an existing role', async () => {
-    await expect(updateRole(tokenSession, 'role', { permissions: ['*'] })).rejects.toMatchObject({
+    await expect(
+      updateRole(tokenSession, 'role', { permissions: ['users:*'] }),
+    ).rejects.toMatchObject({
       status: 403,
     });
+  });
+
+  it.each(['*', 'not-a-real-permission', 'unknown:*'])(
+    'rejects invalid custom permission %s',
+    async (permission) => {
+      const superAdmin = { ...tokenSession, permissions: ['*'] };
+      await expect(
+        createRole(superAdmin, { name: 'Custom', slug: 'custom', permissions: [permission] }),
+      ).rejects.toThrow();
+      expect(updateRoleSchema.safeParse({ permissions: [permission] }).success).toBe(false);
+    },
+  );
+
+  it('accepts supported permissions, module wildcards, and entity-specific permissions', () => {
+    expect(
+      createRoleSchema.safeParse({
+        name: 'Custom',
+        slug: 'custom',
+        permissions: ['pages:read', 'users:*', 'system_records:events:read'],
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects broader role creation for browser sessions too', async () => {
